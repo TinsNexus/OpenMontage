@@ -161,3 +161,29 @@ def test_execute_failure_keeps_partial_results(monkeypatch, tmp_path, fake_reque
     assert "prompt blocked" in r.error and "1/2" in r.error
     assert r.artifacts == [str(tmp_path / "o_1.png")]
     assert r.cost_usd == 0.03
+
+
+def test_upload_retries_dropped_connections(monkeypatch, tmp_path):
+    import requests as real_requests
+
+    from tools import piapi_client
+
+    img = tmp_path / "a.png"
+    img.write_bytes(b"PNG")
+    attempts = []
+
+    def post(url, **kw):
+        attempts.append(url)
+        if len(attempts) < 3:
+            raise real_requests.ConnectionError("Broken pipe")
+        return _Resp({"code": 200, "data": {"url": "https://cdn/a.png"}})
+
+    monkeypatch.setattr(real_requests, "post", post)
+    monkeypatch.setattr("time.sleep", lambda s: None)
+    assert piapi_client.upload(str(img), "k") == "https://cdn/a.png"
+    assert len(attempts) == 3
+
+    attempts.clear()
+    monkeypatch.setattr(real_requests, "post", lambda url, **kw: (_ for _ in ()).throw(real_requests.ConnectionError("x")))
+    with pytest.raises(real_requests.ConnectionError):
+        piapi_client.upload(str(img), "k")

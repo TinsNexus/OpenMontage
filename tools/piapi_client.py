@@ -20,6 +20,7 @@ from typing import Any, Callable
 API_BASE = "https://api.piapi.ai/api/v1"
 UPLOAD_URL = "https://upload.theapi.app/api/ephemeral_resource"
 UPLOAD_MAX_BYTES = 10 * 1024 * 1024
+UPLOAD_ATTEMPTS = 3
 UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".wav", ".mp3"}
 
 # Status strings seen across PiAPI model families (case-insensitive).
@@ -65,12 +66,22 @@ def upload(local_path: str, api_key: str) -> str:
             f"{path.name} is {len(raw) / 1e6:.1f} MB; PiAPI ephemeral upload max is 10 MB. "
             "Compress it or pass a public URL instead."
         )
-    resp = requests.post(
-        UPLOAD_URL,
-        headers={"x-api-key": api_key, "Content-Type": "application/json"},
-        json={"file_name": path.name[-128:], "file_data": base64.b64encode(raw).decode("ascii")},
-        timeout=120,
-    )
+    payload = {"file_name": path.name[-128:], "file_data": base64.b64encode(raw).decode("ascii")}
+    # The upload host occasionally drops the connection mid-request (BrokenPipe /
+    # ConnectionReset). Uploads are free and idempotent, so retry a few times.
+    for attempt in range(UPLOAD_ATTEMPTS):
+        try:
+            resp = requests.post(
+                UPLOAD_URL,
+                headers={"x-api-key": api_key, "Content-Type": "application/json"},
+                json=payload,
+                timeout=120,
+            )
+            break
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == UPLOAD_ATTEMPTS - 1:
+                raise
+            time.sleep(2 * (attempt + 1))
     body = json_or_error(resp, "upload")
     url = (body.get("data") or {}).get("url")
     if not url:
