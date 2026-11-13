@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Images</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Images</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/">Library</a>
+      <a href="/gallery">Gallery</a>
+      <a href="/images" aria-current="page">Images</a>
+      <a href="/characters">Characters</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="g-layout">
+    <section class="g-list" id="form" aria-label="Tạo ảnh"></section>
+    <section class="g-detail" aria-label="Ảnh đã tạo">
+      <div class="g-actions" style="margin:0 0 12px">
+        <label class="g-cost" for="filter">Hiển thị</label>
+        <select id="filter" class="g-role"></select>
+      </div>
+      <div id="results" class="g-thumbs" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))"></div>
+      <p class="hint" id="empty" style="display:none">Chưa có ảnh nào. Viết prompt ở bên trái rồi bấm “Tạo ảnh”.</p>
+    </section>
+  </div>
+</div>
+<script type="module" src="/ui/images.js"></script>
+</body>
+</html>

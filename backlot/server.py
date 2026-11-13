@@ -6,8 +6,10 @@ refetch state. The server never writes to project directories, with one
 explicit exception: user-triggered ``POST /api/social/...`` and
 ``POST /api/thumbs/...`` save social copy and thumbnails under
 ``projects/<id>/artifacts/{social,thumbs}/`` (see ``backlot.social`` and
-``backlot.thumbs``). The ``/api/characters`` endpoints manage the shared
-character library outside ``projects/`` (see ``lib.characters``).
+``backlot.thumbs``), and ``POST /api/images/...`` saves generated images
+into ``projects/<id>/assets/images/`` (see ``backlot.images``). The
+``/api/characters`` endpoints manage the shared character library outside
+``projects/`` (see ``lib.characters``).
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backlot import social, thumbs
+from backlot import images as imagegen, social, thumbs
 from lib import characters as charlib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
@@ -350,6 +352,98 @@ def create_app() -> FastAPI:
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+    # ---- Images (free-form generation) ---------------------------------
+
+    @app.get("/api/images")
+    async def images_list() -> list:
+        return await asyncio.to_thread(imagegen.list_images, PROJECTS_DIR)
+
+    @app.get("/api/images/options")
+    async def images_options() -> dict:
+        def build() -> dict:
+            opts = imagegen.options()
+            opts["projects"] = [{"project_id": p.name, "title": (json.loads((p / "project.json").read_text())
+                                                                  .get("title") if (p / "project.json").is_file() else p.name)}
+                                for p in sorted((d for d in PROJECTS_DIR.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)] if PROJECTS_DIR.is_dir() else []
+            opts["characters"] = [{"id": c["id"], "name": c["name"], "primary_image": c["primary_image"]}
+                                  for c in charlib.list_characters() if c["primary_image"]]
+            return opts
+        return await asyncio.to_thread(build)
+
+    @app.post("/api/images/generate")
+    async def images_generate(request: Request, payload: dict = Body(...)) -> dict:
+        """Generate images into an existing project, or a new one when ``new_project`` is given."""
+        _require_action(request, "image")
+        import base64
+        import re as _re
+        import tempfile
+
+        new_title = str(payload.get("new_project") or "").strip()
+        if new_title:
+            pid = _re.sub(r"[^a-z0-9]+", "-", charlib.slugify(new_title)).strip("-")[:60] or "images"
+            if (PROJECTS_DIR / pid).exists():
+                raise HTTPException(status_code=409, detail=f"project {pid} already exists — pick it from the list")
+            from lib.checkpoint import init_project
+
+            await asyncio.to_thread(init_project, pid, title=new_title, pipeline_type="images",
+                                    pipeline_dir=PROJECTS_DIR)
+        else:
+            pid = str(payload.get("project_id") or "")
+        project_dir = _safe_project_dir(pid)
+
+        refs, labels = [], []
+        for ref in payload.get("references") or []:
+            ref_dir = _safe_project_dir(str(ref.get("project_id") or ""))
+            src = (ref_dir / str(ref.get("path") or "")).resolve()
+            try:
+                src.relative_to(ref_dir.resolve())
+            except ValueError:
+                raise HTTPException(status_code=403, detail="reference path escapes project")
+            if not src.is_file() or src.suffix.lower() not in imagegen.IMAGE_EXT:
+                raise HTTPException(status_code=404, detail=f"reference not found: {ref.get('path')}")
+            refs.append(str(src))
+            labels.append(f"{ref_dir.name}/{ref.get('path')}")
+
+        characters = [str(c) for c in (payload.get("characters") or [])]
+        for cid in characters:
+            try:
+                charlib.get(cid)
+            except (KeyError, ValueError):
+                raise HTTPException(status_code=404, detail=f"unknown character: {cid}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, up in enumerate(payload.get("uploads") or []):
+                name = Path(str(up.get("file_name") or f"upload{i}.png")).name
+                if Path(name).suffix.lower() not in imagegen.IMAGE_EXT:
+                    raise HTTPException(status_code=422, detail="uploads must be png, jpg or webp")
+                try:
+                    data = base64.b64decode(str(up.get("data_base64") or "").split(",", 1)[-1], validate=True)
+                except ValueError:
+                    raise HTTPException(status_code=422, detail="upload is not valid base64")
+                if len(data) > 10 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail=f"{name} is larger than 10 MB")
+                path = Path(tmp) / f"{i}_{name}"
+                path.write_bytes(data)
+                refs.append(str(path))
+                labels.append(f"upload:{name}")
+            try:
+                return await asyncio.to_thread(
+                    imagegen.generate, project_dir,
+                    prompt=str(payload.get("prompt") or ""),
+                    model=str(payload.get("model") or "nano-banana-2.1"),
+                    aspect=str(payload.get("aspect") or "") or None,
+                    resolution=str(payload.get("resolution") or "1K"),
+                    n=int(payload.get("n") or 1),
+                    characters=characters,
+                    character_refs=str(payload.get("character_refs") or "set"),
+                    reference_paths=refs, reference_labels=labels,
+                    name_hint=str(payload.get("name") or ""),
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=str(e))
+            except RuntimeError as e:
+                raise HTTPException(status_code=502, detail=str(e))
+
     # ---- Character library ---------------------------------------------
 
     def _char_or_404(char_id: str) -> dict:
@@ -574,6 +668,10 @@ def create_app() -> FastAPI:
     async def board_page_path(project_path: str) -> HTMLResponse:
         return _ui_html("board.html", ("board.css", "board.js"))
 
+    @app.get("/images")
+    async def images_page() -> HTMLResponse:
+        return _ui_html("images.html", ("board.css", "gallery.css", "images.js"))
+
     @app.get("/characters")
     async def characters_page() -> HTMLResponse:
         return _ui_html("characters.html", ("board.css", "gallery.css", "characters.js"))
@@ -597,7 +695,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery", "/characters") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/images", "/characters") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
