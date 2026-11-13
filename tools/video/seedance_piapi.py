@@ -354,6 +354,20 @@ class SeedancePiAPI(BaseTool):
 
         probed = probe_output(output_path)
         usage = (task.get("meta") or {}).get("usage") or {}
+        _write_sidecar(output_path, {
+            "prompt": inputs["prompt"],
+            "provider": "seedance",
+            "gateway": "piapi",
+            "model": task_type,
+            "task_id": task_id,
+            "operation": inputs.get("operation", "text_to_video"),
+            "resolution": payload["input"]["resolution"],
+            "aspect_ratio": payload["input"].get("aspect_ratio"),
+            "duration_seconds": probed.get("duration_seconds", payload["input"]["duration"]),
+            "reference_images": payload["input"].get("image_urls", []),
+            "cost_usd": self.estimate_cost(inputs),
+            "created_at": time.time(),
+        })
         return ToolResult(
             success=True,
             data={
@@ -380,3 +394,17 @@ class SeedancePiAPI(BaseTool):
             model=task_type,
         )
 
+
+
+def _write_sidecar(video_path: Path, meta: dict[str, Any]) -> None:
+    """Write ``<stem>.meta.json`` next to the video (prompt provenance for Backlot's gallery).
+
+    Best effort: a sidecar failure must never fail a paid, successful generation.
+    """
+    import json
+
+    try:
+        sidecar = video_path.with_name(f"{video_path.stem}.meta.json")
+        sidecar.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass

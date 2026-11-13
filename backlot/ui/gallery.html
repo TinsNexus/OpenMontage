@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Gallery</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Gallery</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/">Library</a>
+      <a href="/gallery" aria-current="page">Gallery</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="g-layout">
+    <section class="g-list" aria-label="Danh sách video">
+      <div class="g-filter">
+        <input id="search" type="search" placeholder="Lọc theo dự án hoặc tên file…" aria-label="Lọc video">
+      </div>
+      <div id="list"></div>
+      <p class="hint" id="empty" style="display:none">Chưa có video nào trong projects/*/assets/video hoặc renders/.</p>
+    </section>
+
+    <section class="g-detail" id="detail" aria-live="polite">
+      <p class="hint">Chọn một video ở bên trái.</p>
+    </section>
+  </div>
+</div>
+<script type="module" src="/ui/gallery.js"></script>
+</body>
+</html>

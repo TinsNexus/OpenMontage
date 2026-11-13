@@ -175,6 +175,13 @@ def test_execute_create_poll_download(monkeypatch, tmp_path, fake_requests):
     assert create_url == "https://api.piapi.ai/api/v1/task"
     assert kw["headers"]["X-API-Key"] == "test-piapi-key"
     assert calls["get"][0][0] == "https://api.piapi.ai/api/v1/task/t-1"
+    # prompt provenance sidecar for the Backlot gallery
+    import json
+    meta = json.loads((tmp_path / "clip.meta.json").read_text())
+    assert meta["prompt"] == "x"
+    assert meta["model"] == "seedance-2.5"
+    assert meta["task_id"] == "t-1"
+    assert meta["cost_usd"] == 6.0
 
 
 def test_execute_reports_failed_task(monkeypatch, tmp_path, fake_requests):

@@ -2,7 +2,9 @@
 
 The watcher observes ``projects/`` with watchfiles; on any change it bumps a
 per-project version and wakes SSE subscribers, who tell the browser to
-refetch state. The server never writes to project directories.
+refetch state. The server never writes to project directories, with one
+explicit exception: ``POST /api/social/...`` saves user-requested social copy
+under ``projects/<id>/artifacts/social/`` (see ``backlot.social``).
 """
 
 from __future__ import annotations
@@ -14,10 +16,11 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from backlot import social
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -275,6 +278,48 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="media not found")
         return FileResponse(target)
 
+    # ---- Gallery + social copy -------------------------------------------
+
+    @app.get("/api/videos")
+    async def videos() -> list:
+        return await asyncio.to_thread(social.list_videos, PROJECTS_DIR)
+
+    @app.get("/api/social/options")
+    async def social_options() -> dict:
+        return {
+            "platforms": [{"id": k, "label": v["label"]} for k, v in social.PLATFORMS.items()],
+            "languages": [{"id": k, "label": v} for k, v in social.LANGUAGES.items()],
+            "model": __import__("os").environ.get("BACKLOT_COPY_MODEL") or social.DEFAULT_MODEL,
+        }
+
+    @app.post("/api/social/{project_id}")
+    async def social_generate(project_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        # Spends money: require a custom header so a random web page cannot
+        # trigger it cross-origin (custom headers force a CORS preflight, and
+        # Backlot answers none).
+        if request.headers.get("x-backlot-action") != "social":
+            raise HTTPException(status_code=403, detail="missing X-Backlot-Action header")
+        project_dir = _safe_project_dir(project_id)
+        rel = str(payload.get("video") or "")
+        target = (project_dir / rel).resolve()
+        try:
+            target.relative_to(project_dir.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403, detail="path escapes project")
+        if target.suffix.lower() not in social.VIDEO_EXT or not target.is_file():
+            raise HTTPException(status_code=404, detail="video not found")
+        try:
+            return await asyncio.to_thread(
+                social.generate_social, project_dir, target.relative_to(project_dir.resolve()).as_posix(),
+                platform=str(payload.get("platform") or "facebook_reels"),
+                language=str(payload.get("language") or "vi"),
+                notes=str(payload.get("notes") or "")[:1000],
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
     # ---- UI ------------------------------------------------------------
 
     @app.get("/p/{project_id}")
@@ -285,9 +330,13 @@ def create_app() -> FastAPI:
     async def board_page_path(project_path: str) -> HTMLResponse:
         return _ui_html("board.html", ("board.css", "board.js"))
 
+    @app.get("/gallery")
+    async def gallery_page() -> HTMLResponse:
+        return _ui_html("gallery.html", ("board.css", "gallery.css", "gallery.js"))
+
     @app.get("/")
     async def library_page() -> HTMLResponse:
-        return _ui_html("index.html", ("board.css", "library.js"))
+        return _ui_html("index.html", ("board.css", "gallery.css", "library.js"))
 
     if UI_DIR.is_dir():
         app.mount("/ui", StaticFiles(directory=UI_DIR), name="ui")
@@ -300,7 +349,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path == "/" or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
