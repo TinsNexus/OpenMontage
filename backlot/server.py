@@ -3,8 +3,10 @@
 The watcher observes ``projects/`` with watchfiles; on any change it bumps a
 per-project version and wakes SSE subscribers, who tell the browser to
 refetch state. The server never writes to project directories, with one
-explicit exception: ``POST /api/social/...`` saves user-requested social copy
-under ``projects/<id>/artifacts/social/`` (see ``backlot.social``).
+explicit exception: user-triggered ``POST /api/social/...`` and
+``POST /api/thumbs/...`` save social copy and thumbnails under
+``projects/<id>/artifacts/{social,thumbs}/`` (see ``backlot.social`` and
+``backlot.thumbs``).
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backlot import social
+from backlot import social, thumbs
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -290,27 +292,53 @@ def create_app() -> FastAPI:
             "platforms": [{"id": k, "label": v["label"]} for k, v in social.PLATFORMS.items()],
             "languages": [{"id": k, "label": v} for k, v in social.LANGUAGES.items()],
             "model": __import__("os").environ.get("BACKLOT_COPY_MODEL") or social.DEFAULT_MODEL,
+            "thumb_aspects": [{"id": k, "label": v} for k, v in thumbs.ASPECTS.items()],
+            "thumb_model": thumbs.AI_MODEL,
+            "thumb_cost_usd": thumbs.estimate_ai_cost("1K"),
         }
+
+    @app.post("/api/thumbs/{project_id}/frame")
+    async def thumb_frame(project_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "thumb")
+        project_dir = _safe_project_dir(project_id)
+        rel = _safe_video(project_dir, payload.get("video"))
+        try:
+            return await asyncio.to_thread(thumbs.capture_frame, project_dir, rel, float(payload.get("time_s") or 0))
+        except (TypeError, ValueError) as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @app.post("/api/thumbs/{project_id}/ai")
+    async def thumb_ai(project_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "thumb")
+        project_dir = _safe_project_dir(project_id)
+        rel = _safe_video(project_dir, payload.get("video"))
+        prompt = social.resolve_prompt(project_dir, rel)["prompt"]
+        try:
+            return await asyncio.to_thread(
+                thumbs.generate_ai_thumb, project_dir, rel,
+                frame_path=str(payload.get("frame") or ""),
+                aspect=str(payload.get("aspect") or "16:9"),
+                title_text=str(payload.get("title_text") or ""),
+                style_notes=str(payload.get("style_notes") or ""),
+                video_prompt=prompt,
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="frame not found — grab a frame first")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
 
     @app.post("/api/social/{project_id}")
     async def social_generate(project_id: str, request: Request, payload: dict = Body(...)) -> dict:
-        # Spends money: require a custom header so a random web page cannot
-        # trigger it cross-origin (custom headers force a CORS preflight, and
-        # Backlot answers none).
-        if request.headers.get("x-backlot-action") != "social":
-            raise HTTPException(status_code=403, detail="missing X-Backlot-Action header")
+        _require_action(request, "social")
         project_dir = _safe_project_dir(project_id)
-        rel = str(payload.get("video") or "")
-        target = (project_dir / rel).resolve()
-        try:
-            target.relative_to(project_dir.resolve())
-        except ValueError:
-            raise HTTPException(status_code=403, detail="path escapes project")
-        if target.suffix.lower() not in social.VIDEO_EXT or not target.is_file():
-            raise HTTPException(status_code=404, detail="video not found")
+        rel = _safe_video(project_dir, payload.get("video"))
         try:
             return await asyncio.to_thread(
-                social.generate_social, project_dir, target.relative_to(project_dir.resolve()).as_posix(),
+                social.generate_social, project_dir, rel,
                 platform=str(payload.get("platform") or "facebook_reels"),
                 language=str(payload.get("language") or "vi"),
                 notes=str(payload.get("notes") or "")[:1000],
@@ -365,6 +393,24 @@ def _safe_project_dir(project_id: str) -> Path:
     if not project_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"unknown project: {project_id}")
     return project_dir
+
+
+def _require_action(request: Request, action: str) -> None:
+    """Writes (and paid calls) need a custom header: a cross-origin page cannot
+    send one without a CORS preflight, which Backlot never answers."""
+    if request.headers.get("x-backlot-action") != action:
+        raise HTTPException(status_code=403, detail="missing X-Backlot-Action header")
+
+
+def _safe_video(project_dir: Path, rel: object) -> str:
+    target = (project_dir / str(rel or "")).resolve()
+    try:
+        rel_path = target.relative_to(project_dir.resolve()).as_posix()
+    except ValueError:
+        raise HTTPException(status_code=403, detail="path escapes project")
+    if target.suffix.lower() not in social.VIDEO_EXT or not target.is_file():
+        raise HTTPException(status_code=404, detail="video not found")
+    return rel_path
 
 
 def _sse(payload: dict) -> str:

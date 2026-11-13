@@ -60,6 +60,12 @@ CHAT_URL = "https://api.piapi.ai/v1/chat/completions"
 # Listing + prompt provenance (read-only)
 # ---------------------------------------------------------------------------
 
+def list_thumbs(project_dir: Path, rel_video: str) -> list[dict[str, Any]]:
+    from backlot import thumbs
+
+    return thumbs.list_thumbs(project_dir, rel_video)
+
+
 def _read_text(path: Path) -> Optional[str]:
     try:
         return path.read_text(encoding="utf-8", errors="replace")
@@ -152,6 +158,7 @@ def list_videos(projects_dir: Path) -> list[dict[str, Any]]:
                     "duration_seconds": meta.get("duration_seconds"),
                     "resolution": meta.get("resolution"),
                     "social": _read_json(social_path(project_dir, rel)),
+                    "thumbs": list_thumbs(project_dir, rel),
                 })
     out.sort(key=lambda v: v["modified"], reverse=True)
     return out

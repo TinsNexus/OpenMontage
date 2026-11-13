@@ -144,3 +144,91 @@ def test_social_endpoint_reports_missing_key(client, projects_root, monkeypatch)
     r = client.post("/api/social/fight", json={"video": "assets/video/clip.mp4", "platform": "tiktok"},
                     headers={"X-Backlot-Action": "social"})
     assert r.status_code == 502 and "PIAPI" in r.json()["detail"]
+
+
+# ---- thumbnails --------------------------------------------------------------
+
+import shutil
+import subprocess
+
+from backlot import thumbs
+
+needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
+
+
+def _tiny_video(path: Path) -> None:
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=10",
+                    "-t", "2", "-pix_fmt", "yuv420p", str(path)], check=True)
+
+
+@needs_ffmpeg
+def test_capture_frame_and_list(projects_root):
+    p = _project(projects_root)
+    _tiny_video(p / "assets" / "video" / "clip.mp4")
+    t = thumbs.capture_frame(p, "assets/video/clip.mp4", 1.25)
+    assert t["kind"] == "frame" and t["time_s"] == 1.25
+    assert (p / t["path"]).is_file() and t["path"].startswith("artifacts/thumbs/")
+    listed = social.list_videos(projects_root)[0]["thumbs"]
+    assert [x["path"] for x in listed] == [t["path"]]
+
+
+def test_thumb_prompt_text_rules():
+    with_text = thumbs.build_thumb_prompt(aspect="9:16", title_text="Một mình giữa mưa", style_notes="", video_prompt="P")
+    assert "Một mình giữa mưa" in with_text and "diacritic" in with_text and "vertical 9:16" in with_text
+    no_text = thumbs.build_thumb_prompt(aspect="16:9", title_text="  ", style_notes="neon", video_prompt=None)
+    assert "Do not put any text" in no_text and "neon" in no_text
+
+
+@needs_ffmpeg
+def test_generate_ai_thumb_uses_piapi_image(projects_root, monkeypatch):
+    from tools.base_tool import ToolResult
+    from tools.graphics import piapi_image
+
+    p = _project(projects_root)
+    _tiny_video(p / "assets" / "video" / "clip.mp4")
+    frame = thumbs.capture_frame(p, "assets/video/clip.mp4", 0.5)
+    seen = {}
+
+    def fake_execute(self, inputs):
+        seen.update(inputs)
+        Path(inputs["output_path"]).write_bytes(b"PNG")
+        return ToolResult(success=True, data={"task_ids": ["t1"]}, cost_usd=0.03)
+
+    monkeypatch.setattr(piapi_image.PiAPIImage, "execute", fake_execute)
+    t = thumbs.generate_ai_thumb(p, "assets/video/clip.mp4", frame_path=frame["path"], aspect="9:16",
+                                 title_text="Sasa", video_prompt="rooftop")
+    assert t["kind"] == "ai" and t["aspect_ratio"] == "9:16" and t["cost_usd"] == 0.03
+    assert seen["image_path"].endswith(frame["name"]) and seen["aspect_ratio"] == "9:16"
+    assert seen["model"] == thumbs.AI_MODEL and '"Sasa"' in seen["prompt"]
+    with pytest.raises(ValueError):
+        thumbs.generate_ai_thumb(p, "assets/video/clip.mp4", frame_path="../../x.png")
+    with pytest.raises(ValueError):
+        thumbs.generate_ai_thumb(p, "assets/video/clip.mp4", frame_path=frame["path"], aspect="2:1")
+
+
+@needs_ffmpeg
+def test_thumb_endpoints(client, projects_root, monkeypatch):
+    from tools.base_tool import ToolResult
+    from tools.graphics import piapi_image
+
+    p = _project(projects_root)
+    _tiny_video(p / "assets" / "video" / "clip.mp4")
+    body = {"video": "assets/video/clip.mp4", "time_s": 1}
+    assert client.post("/api/thumbs/fight/frame", json=body).status_code == 403
+    hdr = {"X-Backlot-Action": "thumb"}
+    frame = client.post("/api/thumbs/fight/frame", json=body, headers=hdr).json()
+    assert frame["kind"] == "frame"
+
+    def fake_execute(self, inputs):
+        Path(inputs["output_path"]).write_bytes(b"PNG")
+        return ToolResult(success=True, data={}, cost_usd=0.03)
+
+    monkeypatch.setattr(piapi_image.PiAPIImage, "execute", fake_execute)
+    ai = client.post("/api/thumbs/fight/ai", headers=hdr,
+                     json={"video": "assets/video/clip.mp4", "frame": frame["path"], "aspect": "16:9"})
+    assert ai.status_code == 200 and ai.json()["kind"] == "ai"
+    missing = client.post("/api/thumbs/fight/ai", headers=hdr,
+                          json={"video": "assets/video/clip.mp4", "frame": "artifacts/nope.png"})
+    assert missing.status_code == 404
+    opts = client.get("/api/social/options").json()
+    assert opts["thumb_model"] == thumbs.AI_MODEL and opts["thumb_cost_usd"] == 0.03

@@ -114,6 +114,7 @@ function renderDetail() {
     ),
     promptCard(v),
     socialCard(v),
+    thumbCard(v, video),
   );
 }
 
@@ -233,6 +234,131 @@ function renderCopy(out, s) {
         el("p", {}, h.caption || ""),
         el("p", { class: "g-sub" }, (h.hashtags || []).join(" "))))));
   }
+}
+
+// ---------------------------------------------------------------- thumbnails
+
+async function postJSON(url, action, body) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Backlot-Action": action },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+  return data;
+}
+
+function stripEmoji(text) {
+  return (text || "").replace(/\p{Extended_Pictographic}|️/gu, "").replace(/\s+/g, " ").trim();
+}
+
+function thumbCard(v, video) {
+  v.thumbs = v.thumbs || [];
+  let selectedFrame = (v.thumbs.find((t) => t.kind === "frame") || {}).path || null;
+
+  const card = el("div", { class: "g-card" });
+  card.append(el("div", { class: "g-card-h" }, el("h3", {}, "Thumbnail"), el("span", { class: "spacer" })));
+
+  const grabBtn = el("button", { class: "g-btn", type: "button" }, "Chụp khung hiện tại");
+  const err = el("div", { class: "g-error", role: "alert" });
+  const grid = el("div", { class: "g-thumbs" });
+
+  const aspect = el("select", { id: "t-aspect" },
+    options.thumb_aspects.map((a) => el("option", { value: a.id }, a.label)));
+  aspect.value = "16:9";
+  const titleText = el("input", { id: "t-title", type: "text", maxlength: "120",
+    placeholder: "Chữ trên thumbnail (để trống nếu không muốn chữ)" });
+  titleText.value = stripEmoji(v.social?.titles?.[0]);
+  const style = el("textarea", { id: "t-style", placeholder: "Gợi ý phong cách (không bắt buộc): cận mặt, ánh neon đỏ, góc thấp…" });
+  const aiBtn = el("button", { class: "g-btn primary", type: "button" }, "Tạo thumbnail AI");
+
+  function updateAi() {
+    aiBtn.disabled = !selectedFrame || busy;
+    aiBtn.title = selectedFrame ? "" : "Chụp hoặc chọn một khung hình gốc trước";
+  }
+
+  function renderGrid() {
+    grid.innerHTML = "";
+    if (!v.thumbs.length) {
+      grid.append(el("p", { class: "hint" }, "Chưa có thumbnail. Tua video tới khung hình đẹp rồi bấm “Chụp khung hiện tại”."));
+    }
+    for (const t of v.thumbs) {
+      const isFrame = t.kind === "frame";
+      const picked = isFrame && t.path === selectedFrame;
+      const label = isFrame ? `Khung ${Number(t.time_s ?? 0).toFixed(1)}s` : `AI ${t.aspect_ratio || ""}`;
+      grid.append(el("figure", { class: `g-thumb-tile${picked ? " picked" : ""}` },
+        el("a", { href: mediaURL(v.project_id, t.path), target: "_blank", rel: "noopener" },
+          el("img", { src: thumbURL(v.project_id, t.path, 640), loading: "lazy", alt: label })),
+        el("figcaption", {},
+          el("span", { class: `chip${isFrame ? "" : " ok"}` }, label),
+          isFrame ? el("button", {
+            class: "g-btn", type: "button", "aria-pressed": picked ? "true" : "false",
+            onclick: () => { selectedFrame = t.path; renderGrid(); updateAi(); },
+          }, picked ? "Đang chọn" : "Dùng làm gốc") : null,
+          el("a", { class: "g-btn", href: mediaURL(v.project_id, t.path), download: t.name }, "Tải"),
+        ),
+      ));
+    }
+  }
+
+  grabBtn.addEventListener("click", async () => {
+    err.textContent = "";
+    grabBtn.disabled = true;
+    try {
+      video.pause();
+      const t = await postJSON(`/api/thumbs/${encodeURIComponent(v.project_id)}/frame`, "thumb",
+        { video: v.path, time_s: video.currentTime || 0 });
+      v.thumbs = [t, ...v.thumbs.filter((x) => x.path !== t.path)];
+      selectedFrame = t.path;
+      renderGrid();
+      updateAi();
+    } catch (e) {
+      err.textContent = `Không chụp được: ${e.message}`;
+    } finally {
+      grabBtn.disabled = false;
+    }
+  });
+
+  aiBtn.addEventListener("click", async () => {
+    if (busy || !selectedFrame) return;
+    busy = true;
+    aiBtn.disabled = true;
+    aiBtn.textContent = "Đang tạo… (~30s)";
+    err.textContent = "";
+    try {
+      const t = await postJSON(`/api/thumbs/${encodeURIComponent(v.project_id)}/ai`, "thumb", {
+        video: v.path, frame: selectedFrame, aspect: aspect.value,
+        title_text: titleText.value, style_notes: style.value,
+      });
+      v.thumbs = [t, ...v.thumbs];
+      renderGrid();
+    } catch (e) {
+      err.textContent = `Không tạo được: ${e.message}`;
+    } finally {
+      busy = false;
+      aiBtn.textContent = "Tạo thumbnail AI";
+      updateAi();
+    }
+  });
+
+  card.append(
+    el("div", { class: "g-actions" }, grabBtn,
+      el("span", { class: "g-cost" }, "Tua video tới khung đẹp rồi bấm · miễn phí")),
+    grid,
+    el("div", { class: "g-form", style: "margin-top:16px" },
+      el("label", { for: "t-aspect" }, "Khung", aspect),
+      el("label", { for: "t-title" }, "Chữ trên ảnh", titleText),
+      el("label", { class: "full", for: "t-style" }, "Phong cách", style),
+    ),
+    el("div", { class: "g-actions" }, aiBtn,
+      el("span", { class: "g-cost" },
+        `Dựa trên khung đang chọn · ${options.thumb_model} qua PiAPI · $${Number(options.thumb_cost_usd).toFixed(2)} mỗi ảnh`)),
+    err,
+  );
+  renderGrid();
+  updateAi();
+  return card;
 }
 
 // ---------------------------------------------------------------- boot
