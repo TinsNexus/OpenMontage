@@ -187,3 +187,58 @@ def test_upload_retries_dropped_connections(monkeypatch, tmp_path):
     monkeypatch.setattr(real_requests, "post", lambda url, **kw: (_ for _ in ()).throw(real_requests.ConnectionError("x")))
     with pytest.raises(real_requests.ConnectionError):
         piapi_client.upload(str(img), "k")
+
+
+def _noisy_png(path, size, mode="RGB"):
+    import os as _os
+
+    from PIL import Image
+
+    Image.frombytes(mode, size, _os.urandom(size[0] * size[1] * len(mode))).save(path)
+
+
+def test_upload_compresses_large_images(monkeypatch, tmp_path):
+    import base64 as b64
+    import io
+
+    import requests as real_requests
+    from PIL import Image
+
+    from tools import piapi_client
+
+    img = tmp_path / "ref.png"
+    _noisy_png(img, (2400, 1800))
+    assert img.stat().st_size > piapi_client.UPLOAD_COMPRESS_OVER_BYTES
+    sent = []
+    monkeypatch.setattr(real_requests, "post", lambda url, **kw: sent.append(kw["json"]) or
+                        _Resp({"code": 200, "data": {"url": "https://cdn/ref.jpg"}}))
+
+    assert piapi_client.upload(str(img), "k") == "https://cdn/ref.jpg"
+    body = sent[0]
+    assert body["file_name"] == "ref.jpg"
+    data = b64.b64decode(body["file_data"])
+    assert len(data) < img.stat().st_size
+    with Image.open(io.BytesIO(data)) as out:
+        assert out.format == "JPEG"
+        assert max(out.size) == piapi_client.UPLOAD_COMPRESS_MAX_SIDE
+        assert out.size[0] / out.size[1] == pytest.approx(2400 / 1800, rel=0.01)
+
+
+def test_compress_image_flattens_alpha_and_skips_small_or_other_files(tmp_path):
+    import io
+
+    from PIL import Image
+
+    from tools import piapi_client
+
+    rgba = tmp_path / "a.png"
+    _noisy_png(rgba, (1200, 1200), mode="RGBA")
+    data, name = piapi_client.compress_image(rgba.read_bytes(), "a.png")
+    assert name == "a.jpg"
+    with Image.open(io.BytesIO(data)) as out:
+        assert out.mode == "RGB"
+
+    assert piapi_client.compress_image(b"tiny", "s.png") == (b"tiny", "s.png")
+    big = b"\0" * (piapi_client.UPLOAD_COMPRESS_OVER_BYTES + 1)
+    assert piapi_client.compress_image(big, "clip.mp4") == (big, "clip.mp4")
+    assert piapi_client.compress_image(big, "broken.png") == (big, "broken.png")

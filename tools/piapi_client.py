@@ -22,6 +22,12 @@ UPLOAD_URL = "https://upload.theapi.app/api/ephemeral_resource"
 UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 UPLOAD_ATTEMPTS = 3
 UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".mp4", ".wav", ".mp3"}
+# The upload host times out on multi-MB base64 bodies, so larger still images
+# are re-encoded in memory before sending (the file on disk is untouched).
+UPLOAD_COMPRESS_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+UPLOAD_COMPRESS_OVER_BYTES = 500 * 1024
+UPLOAD_COMPRESS_MAX_SIDE = 1600
+UPLOAD_COMPRESS_JPEG_QUALITY = 88
 
 # Status strings seen across PiAPI model families (case-insensitive).
 _DONE = {"completed", "success"}
@@ -47,6 +53,39 @@ def json_or_error(resp: Any, what: str) -> dict[str, Any]:
     return body
 
 
+def compress_image(raw: bytes, name: str) -> tuple[bytes, str]:
+    """Shrink a large still image for upload: long side <= UPLOAD_COMPRESS_MAX_SIDE, JPEG.
+
+    Returns ``(raw, name)`` unchanged for small files, non-images, unreadable
+    data, or when re-encoding would not make the file smaller.
+    """
+    suffix = Path(name).suffix.lower()
+    if suffix not in UPLOAD_COMPRESS_EXTENSIONS or len(raw) <= UPLOAD_COMPRESS_OVER_BYTES:
+        return raw, name
+    import io
+
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        with Image.open(io.BytesIO(raw)) as img:
+            img.load()
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                rgba = img.convert("RGBA")
+                flat = Image.new("RGB", rgba.size, (255, 255, 255))
+                flat.paste(rgba, mask=rgba.getchannel("A"))
+            else:
+                flat = img.convert("RGB")
+    except (OSError, UnidentifiedImageError):
+        return raw, name
+    flat.thumbnail((UPLOAD_COMPRESS_MAX_SIDE, UPLOAD_COMPRESS_MAX_SIDE), Image.LANCZOS)
+    buf = io.BytesIO()
+    flat.save(buf, format="JPEG", quality=UPLOAD_COMPRESS_JPEG_QUALITY, optimize=True)
+    out = buf.getvalue()
+    if len(out) >= len(raw):
+        return raw, name
+    return out, str(Path(name).with_suffix(".jpg"))
+
+
 def upload(local_path: str, api_key: str) -> str:
     """Push a local file to PiAPI ephemeral storage (24h) and return its URL.
 
@@ -60,13 +99,13 @@ def upload(local_path: str, api_key: str) -> str:
     suffix = path.suffix.lower()
     if suffix not in UPLOAD_EXTENSIONS:
         raise ValueError(f"PiAPI upload supports {sorted(UPLOAD_EXTENSIONS)}; got {suffix or 'no extension'}")
-    raw = path.read_bytes()
+    raw, file_name = compress_image(path.read_bytes(), path.name)
     if len(raw) > UPLOAD_MAX_BYTES:
         raise ValueError(
             f"{path.name} is {len(raw) / 1e6:.1f} MB; PiAPI ephemeral upload max is 10 MB. "
             "Compress it or pass a public URL instead."
         )
-    payload = {"file_name": path.name[-128:], "file_data": base64.b64encode(raw).decode("ascii")}
+    payload = {"file_name": file_name[-128:], "file_data": base64.b64encode(raw).decode("ascii")}
     # The upload host occasionally drops the connection mid-request (BrokenPipe /
     # ConnectionReset). Uploads are free and idempotent, so retry a few times.
     for attempt in range(UPLOAD_ATTEMPTS):
