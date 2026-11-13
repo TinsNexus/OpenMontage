@@ -308,3 +308,32 @@ def test_full_mode_face_angles_and_equal_split(lib_dir, tmp_path):
     touching = _sheet(tmp_path / "touch.png", figures=((0, 172), (173, 345), (346, 519)))
     eq = ch.split_sheet(touching, tmp_path / "eq", panels=3)
     assert [p["method"] for p in eq] == ["equal"] * 3 and [p["box"][0] for p in eq] == [0, 173, 347]
+
+
+def test_pad_to_aspect_and_split_panels_are_seedance_safe(tmp_path):
+    narrow = tmp_path / "narrow.png"
+    Image.new("RGB", (30, 120), (205, 207, 210)).save(narrow)
+    assert ch.pad_to_aspect(narrow) is True
+    w, h = Image.open(narrow).size
+    assert h == 120 and abs(w / h - 9 / 16) < 0.02
+    assert ch.pad_to_aspect(narrow) is False                       # already fine
+    wide = tmp_path / "wide.png"
+    Image.new("RGB", (400, 100), (205, 207, 210)).save(wide)
+    ch.pad_to_aspect(wide)
+    assert Image.open(wide).size == (400, 160)
+
+    panels = ch.split_sheet(_sheet(tmp_path / "s.png"), tmp_path / "out")
+    assert all(p["width"] / p["height"] >= 9 / 16 - 0.01 for p in panels)
+
+
+def test_seedance_rejects_narrow_reference_before_upload(tmp_path, monkeypatch):
+    from tools import piapi_client
+    from tools.video.seedance_piapi import SeedancePiAPI
+
+    narrow = tmp_path / "n.png"
+    Image.new("RGB", (30, 120), (0, 0, 0)).save(narrow)
+    called = []
+    monkeypatch.setattr(piapi_client, "upload", lambda p, k: called.append(p) or "u")
+    with pytest.raises(ValueError, match="aspect 0.25"):
+        SeedancePiAPI()._upload(str(narrow), "k")
+    assert called == []

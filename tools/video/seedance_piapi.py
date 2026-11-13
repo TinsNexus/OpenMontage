@@ -243,7 +243,25 @@ class SeedancePiAPI(BaseTool):
     def estimate_runtime(self, inputs: dict[str, Any]) -> float:
         return 90.0 if inputs.get("model_variant") in ("fast", "mini") else 240.0
 
+    # Seedance rejects reference images outside this width/height range with a
+    # bare "Invalid input" — check locally so the error says what is wrong.
+    REF_ASPECT_RANGE = (0.4, 2.5)
+
     def _upload(self, local_path: str, api_key: str) -> str:
+        if Path(local_path).suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+            from PIL import Image, UnidentifiedImageError
+
+            try:
+                with Image.open(local_path) as img:
+                    w, h = img.size
+            except (OSError, UnidentifiedImageError):
+                w = h = 1   # unreadable here; let the API judge it
+            lo, hi = self.REF_ASPECT_RANGE
+            if not lo <= w / h <= hi:
+                raise ValueError(
+                    f"{Path(local_path).name} is {w}x{h} (aspect {w / h:.2f}); Seedance needs {lo}-{hi}. "
+                    "Pad it with lib.characters.pad_to_aspect()."
+                )
         return piapi_client.upload(local_path, api_key)
 
     def _build_payload(self, inputs: dict[str, Any], api_key: str) -> dict[str, Any]:

@@ -207,8 +207,45 @@ def image_path(slug: str, file: str) -> Path:
 # Character sheets
 # ---------------------------------------------------------------------------
 
+# Video models reject references outside roughly 0.4–2.5 width/height (Seedance:
+# "Invalid input"). Panels cut from a turnaround sheet are often ~0.3, so pad them.
+REF_MIN_ASPECT = 9 / 16
+REF_MAX_ASPECT = 2.5
+
+
+def pad_to_aspect(src: Path | str, dest: Optional[Path | str] = None, *, min_aspect: float = REF_MIN_ASPECT,
+                  max_aspect: float = REF_MAX_ASPECT) -> bool:
+    """Pad an image with its own backdrop colour so width/height falls inside [min, max].
+
+    Writes to ``dest`` (default: in place). Returns True when padding was added.
+    """
+    import numpy as np
+    from PIL import Image
+
+    path = Path(src)
+    img = Image.open(path).convert("RGB")
+    w, h = img.size
+    ratio = w / h
+    if min_aspect <= ratio <= max_aspect:
+        if dest and Path(dest) != path:
+            img.save(dest)
+        return False
+    arr = np.asarray(img)
+    edge = np.concatenate([arr[0], arr[-1], arr[:, 0], arr[:, -1]])
+    color = tuple(int(c) for c in np.median(edge, axis=0))
+    if ratio < min_aspect:
+        new_w, new_h = int(round(h * min_aspect)), h
+    else:
+        new_w, new_h = w, int(round(w / max_aspect))
+    canvas = Image.new("RGB", (new_w, new_h), color)
+    canvas.paste(img, ((new_w - w) // 2, (new_h - h) // 2))
+    canvas.save(dest or path)
+    return True
+
+
 def split_sheet(sheet: Path | str, out_dir: Path | str, *, pad: float = 0.03,
-                min_panel_frac: float = 0.06, panels: Optional[int] = None) -> list[dict[str, Any]]:
+                min_panel_frac: float = 0.06, panels: Optional[int] = None,
+                min_aspect: Optional[float] = REF_MIN_ASPECT) -> list[dict[str, Any]]:
     """Cut a turnaround sheet (figures on a plain light backdrop) into one image per panel.
 
     Columns are classed as "figure" when enough pixels are dark or saturated
@@ -248,6 +285,9 @@ def split_sheet(sheet: Path | str, out_dir: Path | str, *, pad: float = 0.03,
             crop = img.crop((l, 0, r, h))
             path = out / f"{src.stem}_panel{i + 1}.png"
             crop.save(path)
+            if min_aspect:
+                pad_to_aspect(path, min_aspect=min_aspect)
+                crop = Image.open(path)
             results.append({"path": str(path), "box": (l, 0, r, h), "width": crop.width, "height": crop.height,
                             "method": "equal"})
         return results
@@ -265,6 +305,9 @@ def split_sheet(sheet: Path | str, out_dir: Path | str, *, pad: float = 0.03,
         crop = img.crop((l, t, r, b))
         path = out / f"{src.stem}_panel{i + 1}.png"
         crop.save(path)
+        if min_aspect:
+            pad_to_aspect(path, min_aspect=min_aspect)
+            crop = Image.open(path)
         results.append({"path": str(path), "box": (l, t, r, b), "width": crop.width, "height": crop.height,
                         "method": "gaps"})
     return results
