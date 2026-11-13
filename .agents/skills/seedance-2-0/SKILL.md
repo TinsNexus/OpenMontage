@@ -237,7 +237,7 @@ Shot 3 (extreme close-up, rack focus): hero's eyes open, wind whipping.
 |---|---|
 | `duration` | `5`–`8` for hero shots, `10`–`12` for full scenes with multi-shot cuts, `4` for quick inserts. `auto` when unsure. |
 | `aspect_ratio` | `21:9` for cinematic trailers, `16:9` for broadcast / YouTube, `9:16` for Reels/Shorts/TikTok |
-| `resolution` | `720p` default. Drop to `480p` for cost-capped batch previews, not for finals |
+| `resolution` | **`720p` is the project default — for samples and finals alike.** Do not propose a cheaper `480p` preview pass; quote and generate at 720p. Use `480p` only when the user explicitly asks for it. `1080p` only on tiers that support it, on request. |
 | `generate_audio` | Keep **on** unless you have a specific reason to mute — Seedance's moat is synced audio. Strip audio downstream in compose if needed. |
 | `model_variant` | `standard` for hero/cinematic shots; `fast` only for b-roll, previews, or when latency is the hard constraint |
 | `seed` | Set a seed before iterating variants of a chosen shot — everything else held constant |

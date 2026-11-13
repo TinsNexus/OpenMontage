@@ -6,7 +6,7 @@ PiAPI exposes Seedance through its unified task API:
     GET  https://api.piapi.ai/api/v1/task/{id} (poll; data.status, data.output.video)
 
 Local reference media is pushed through PiAPI's ephemeral upload endpoint
-(https://upload.theapi.app/api/ephemeral_resource, 10 MB max, 24h retention,
+(see tools/piapi_client.py; 10 MB max, 24h retention,
 Creator plan or higher).
 
 Docs: https://piapi.ai/docs/seedance-api/seedance-2
@@ -15,8 +15,6 @@ Docs: https://piapi.ai/docs/seedance-api/seedance-2
 
 from __future__ import annotations
 
-import base64
-import os
 import time
 from pathlib import Path
 from typing import Any
@@ -33,10 +31,8 @@ from tools.base_tool import (
     ToolStatus,
     ToolTier,
 )
+from tools import piapi_client
 
-API_BASE = "https://api.piapi.ai/api/v1"
-UPLOAD_URL = "https://upload.theapi.app/api/ephemeral_resource"
-UPLOAD_MAX_BYTES = 10 * 1024 * 1024
 
 # model_variant -> PiAPI task_type (strict content policy).
 _TASK_TYPES = {
@@ -64,15 +60,6 @@ _MODES = {
     "reference_to_video": "omni_reference",
 }
 
-_CONTENT_TYPES = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".webp": "image/webp",
-    ".mp4": "video/mp4",
-    ".wav": "audio/wav",
-    ".mp3": "audio/mpeg",
-}
 
 
 class SeedancePiAPI(BaseTool):
@@ -200,7 +187,7 @@ class SeedancePiAPI(BaseTool):
     # ------------------------------------------------------------------ helpers
 
     def _get_api_key(self) -> str | None:
-        return os.environ.get("PIAPI_API_KEY") or os.environ.get("PIAPI_KEY")
+        return piapi_client.get_api_key()
 
     def get_status(self) -> ToolStatus:
         return ToolStatus.AVAILABLE if self._get_api_key() else ToolStatus.UNAVAILABLE
@@ -242,31 +229,7 @@ class SeedancePiAPI(BaseTool):
         return 90.0 if inputs.get("model_variant") in ("fast", "mini") else 240.0
 
     def _upload(self, local_path: str, api_key: str) -> str:
-        import requests
-
-        path = Path(local_path)
-        if not path.exists():
-            raise FileNotFoundError(f"Reference file not found: {local_path}")
-        suffix = path.suffix.lower()
-        if suffix not in _CONTENT_TYPES:
-            raise ValueError(f"PiAPI upload supports {sorted(_CONTENT_TYPES)}; got {suffix or 'no extension'}")
-        raw = path.read_bytes()
-        if len(raw) > UPLOAD_MAX_BYTES:
-            raise ValueError(
-                f"{path.name} is {len(raw) / 1e6:.1f} MB; PiAPI ephemeral upload max is 10 MB. "
-                "Compress it or pass a public URL instead."
-            )
-        resp = requests.post(
-            UPLOAD_URL,
-            headers={"x-api-key": api_key, "Content-Type": "application/json"},
-            json={"file_name": path.name[-128:], "file_data": base64.b64encode(raw).decode("ascii")},
-            timeout=120,
-        )
-        body = _json_or_error(resp, "upload")
-        url = (body.get("data") or {}).get("url")
-        if not url:
-            raise RuntimeError(f"PiAPI upload returned no URL: {body.get('message') or body}")
-        return url
+        return piapi_client.upload(local_path, api_key)
 
     def _build_payload(self, inputs: dict[str, Any], api_key: str) -> dict[str, Any]:
         task_type = self._task_type(inputs)
@@ -362,44 +325,17 @@ class SeedancePiAPI(BaseTool):
             return ToolResult(success=False, error=f"Seedance (PiAPI) reference upload failed: {e}")
 
         task_type = payload["task_type"]
-        headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
         timeout_s = int(inputs.get("poll_timeout_seconds", 3600))
         task_id = None
 
+        def _remember(tid: str) -> None:
+            nonlocal task_id
+            task_id = tid
+
         try:
-            create = requests.post(f"{API_BASE}/task", headers=headers, json=payload, timeout=60)
-            body = _json_or_error(create, "create task")
-            task = body.get("data") or {}
-            task_id = task.get("task_id")
-            if not task_id:
-                return ToolResult(success=False, error=f"PiAPI returned no task_id: {body.get('message') or body}")
-
-            while True:
-                status = str(task.get("status", "")).lower()
-                if status == "completed":
-                    break
-                if status == "failed":
-                    err = task.get("error") or {}
-                    return ToolResult(
-                        success=False,
-                        error=(
-                            f"Seedance (PiAPI) task {task_id} failed: "
-                            f"{err.get('message') or err.get('raw_message') or 'unknown error'}"
-                            " (content rejections are refunded by PiAPI)"
-                        ),
-                    )
-                if time.time() - start > timeout_s:
-                    return ToolResult(
-                        success=False,
-                        error=(
-                            f"Seedance (PiAPI) task {task_id} still '{status}' after {timeout_s}s. "
-                            f"It may still finish — check GET {API_BASE}/task/{task_id}"
-                        ),
-                    )
-                time.sleep(10)
-                poll = requests.get(f"{API_BASE}/task/{task_id}", headers=headers, timeout=30)
-                task = _json_or_error(poll, "poll task").get("data") or {}
-
+            task = piapi_client.run_task(
+                payload, api_key, label="Seedance", timeout_s=timeout_s, on_task_id=_remember
+            )
             output = task.get("output") or {}
             video_url = output.get("video") or output.get("video_url")
             if not video_url:
@@ -411,7 +347,7 @@ class SeedancePiAPI(BaseTool):
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(video.content)
         except Exception as e:
-            suffix = f" (task_id={task_id})" if task_id else ""
+            suffix = f" (task_id={task_id})" if task_id and task_id not in str(e) else ""
             return ToolResult(success=False, error=f"Seedance (PiAPI) video generation failed{suffix}: {e}")
 
         from tools.video._shared import probe_output
@@ -444,17 +380,3 @@ class SeedancePiAPI(BaseTool):
             model=task_type,
         )
 
-
-def _json_or_error(resp: Any, what: str) -> dict[str, Any]:
-    """Parse a PiAPI response, raising with PiAPI's own message on failure."""
-    try:
-        body = resp.json()
-    except Exception:
-        body = None
-    if resp.status_code >= 400 or not isinstance(body, dict):
-        msg = (body or {}).get("message") if isinstance(body, dict) else (resp.text or "")[:300]
-        raise RuntimeError(f"PiAPI {what} HTTP {resp.status_code}: {msg}")
-    code = body.get("code")
-    if code is not None and code != 200:
-        raise RuntimeError(f"PiAPI {what} error {code}: {body.get('message')}")
-    return body
