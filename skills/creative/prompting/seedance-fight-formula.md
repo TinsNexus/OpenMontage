@@ -7,6 +7,10 @@ gentle reunion. Proven on `projects/mia-arcade-fight` (Mia × Kenta, retro arcad
 Read `seedance-prompting.md` and `.agents/skills/seedance-2-0/SKILL.md` first; this file
 only adds the fight-specific formula and what we learned running it on PiAPI.
 
+This recipe is packaged as the style playbook `styles/hypervelocity-combat.yaml` (offered
+by the `cinematic` pipeline). Select that playbook at proposal; it carries the look, motion,
+audio and quality rules, and points back here for the clip-by-clip prompt template.
+
 ## Production settings (PiAPI)
 
 | Setting | Value | Why |

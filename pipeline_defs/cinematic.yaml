@@ -54,6 +54,7 @@ compatible_playbooks:
   also_works:
     - clean-professional
     - minimalist-diagram
+    - hypervelocity-combat
   custom_allowed: true
 
 stages:
