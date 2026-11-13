@@ -134,6 +134,12 @@ class PiAPIImage(BaseTool):
             "image_path": {"type": "string", "description": "Single local source / reference image (auto-uploaded)."},
             "image_urls": {"type": "array", "items": {"type": "string"}},
             "image_paths": {"type": "array", "items": {"type": "string"}},
+            "characters": {
+                "type": "array", "items": {"type": "string"},
+                "description": "Character library ids (characters/<id>). Their primary images become reference "
+                               "images 1..N and the prompt is prefixed with who each one is.",
+            },
+            "character_refs": {"type": "string", "enum": ["set", "full", "primary"], "default": "set"},
             "poll_timeout_seconds": {"type": "integer", "default": 900},
             "output_path": {
                 "type": "string",
@@ -188,6 +194,28 @@ class PiAPIImage(BaseTool):
         if not prompt:
             raise ValueError("prompt must be non-empty")
 
+        character_paths: list[str] = []
+        if inputs.get("characters"):
+            from lib import characters as charlib
+
+            slugs = list(inputs["characters"])
+            try:
+                items = charlib.references(slugs, inputs.get("character_refs", "set"))
+            except KeyError as e:
+                raise ValueError(str(e).strip("'\""))
+            sentences, n = [], 1
+            for item in items:
+                c, refs = item["char"], item["refs"]
+                nums = list(range(n, n + len(refs)))
+                n += len(refs)
+                character_paths += [r["path"] for r in refs]
+                which = ", ".join(f"{k} ({charlib.ROLES.get(r['role'], r['role'])})" for k, r in zip(nums, refs))
+                label = f"Reference image {nums[0]}" if len(nums) == 1 else f"Reference images {which}"
+                look = (c.get("identity") or c.get("description") or "").rstrip(".")
+                sentences.append(f"{label} {'is' if len(nums) == 1 else 'all show'} {c['name']}: {look}. "
+                                 f"Keep {c['name']}'s face, hair and outfit exactly as in those references.")
+            prompt = " ".join(sentences) + "\n\n" + prompt
+
         data: dict[str, Any] = {"prompt": prompt}
 
         fmt = str(inputs.get("output_format") or "png").lower()
@@ -212,13 +240,16 @@ class PiAPIImage(BaseTool):
                 raise ValueError("safety_level is only supported by nano-banana-pro")
             data["safety_level"] = inputs["safety_level"]
 
-        urls: list[str] = []
+        given: list[str] = []
         if inputs.get("image_url"):
-            urls.append(inputs["image_url"])
-        urls += list(inputs.get("image_urls") or [])
+            given.append(inputs["image_url"])
+        given += list(inputs.get("image_urls") or [])
         local = ([inputs["image_path"]] if inputs.get("image_path") else []) + list(inputs.get("image_paths") or [])
-        if len(urls) + len(local) > _MAX_INPUT_IMAGES:
-            raise ValueError(f"At most {_MAX_INPUT_IMAGES} input images; got {len(urls) + len(local)}")
+        count = len(character_paths) + len(given) + len(local)
+        if count > _MAX_INPUT_IMAGES:
+            raise ValueError(f"At most {_MAX_INPUT_IMAGES} input images; got {count}")
+        # Library characters first: their position matches "Reference image N" in the prompt.
+        urls = [piapi_client.upload(p, api_key) for p in character_paths] + given
         for p in local:
             urls.append(piapi_client.upload(p, api_key))
         if urls:

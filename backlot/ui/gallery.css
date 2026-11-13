@@ -127,6 +127,10 @@
 .g-thumb-tile img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: var(--media-bg); }
 .g-thumb-tile figcaption { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; }
 .g-thumb-tile figcaption .chip { margin-right: auto; }
+.g-thumb-tile .g-role {
+  font: inherit; font-size: calc(11px * var(--fs-scale)); color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px;
+}
 .g-thumb-tile .g-btn { padding: 4px 8px; font-size: calc(11px * var(--fs-scale)); text-decoration: none; }
 
 .g-history summary { cursor: pointer; font-size: calc(12px * var(--fs-scale)); color: var(--text-2); }

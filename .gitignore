@@ -38,6 +38,10 @@ corpus/
 # User music library (personal royalty-free tracks — not part of repo)
 music_library/
 
+# Shared character library (reference images + identity prompts, reused across
+# projects — personal cast, not part of repo; see lib/characters.py)
+/characters/
+
 # Environment & credentials
 .env
 .env.local

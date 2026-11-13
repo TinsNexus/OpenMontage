@@ -165,6 +165,21 @@ class SeedancePiAPI(BaseTool):
             "reference_video_paths": {"type": "array", "items": {"type": "string"}, "description": "Local mp4, auto-uploaded."},
             "reference_audio_urls": {"type": "array", "items": {"type": "string"}, "description": "Up to 3 (mp3/wav)."},
             "reference_audio_paths": {"type": "array", "items": {"type": "string"}, "description": "Local, auto-uploaded."},
+            "characters": {
+                "type": "array", "items": {"type": "string"},
+                "description": "Character library ids (characters/<id>). Their primary reference images become "
+                               "@image1..@imageN (before other reference images) and an [identity_lock] block is "
+                               "prepended to the prompt. reference_to_video only.",
+            },
+            "character_refs": {
+                "type": "string", "enum": ["set", "full", "primary"], "default": "set",
+                "description": "'set' = primary + front face + back (3 images per character); 'full' = up to 6 "
+                               "(+ three-quarter face, side, profile face); 'primary' = primary image only.",
+            },
+            "character_identity_block": {
+                "type": "boolean", "default": True,
+                "description": "Prepend the library's identity text. Turn off if the prompt already describes the characters.",
+            },
             "poll_timeout_seconds": {
                 "type": "integer",
                 "default": 3600,
@@ -243,6 +258,20 @@ class SeedancePiAPI(BaseTool):
                 f"{task_type} does not support {resolution}; use one of {sorted(_PRICING[task_type])}"
             )
         prompt = inputs["prompt"]
+        character_paths: list[str] = []
+        if inputs.get("characters"):
+            if mode != "omni_reference":
+                raise ValueError("characters need operation 'reference_to_video'")
+            from lib import characters as charlib
+
+            slugs = list(inputs["characters"])
+            ref_mode = inputs.get("character_refs", "set")
+            try:
+                character_paths = charlib.reference_paths(slugs, ref_mode)
+            except KeyError as e:
+                raise ValueError(str(e).strip("'\""))
+            if inputs.get("character_identity_block", True):
+                prompt = charlib.identity_block(slugs, mode=ref_mode) + "\n\n" + prompt
         if len(prompt) > 4000:
             raise ValueError(f"Prompt is {len(prompt)} chars; PiAPI Seedance max is 4000")
 
@@ -283,7 +312,9 @@ class SeedancePiAPI(BaseTool):
             data["image_urls"] = frames
 
         elif mode == "omni_reference":
-            images = collect("reference_image_urls", "reference_image_paths")
+            # Library characters come first so they are @image1..@imageN.
+            images = [self._upload(p, api_key) for p in character_paths]
+            images += collect("reference_image_urls", "reference_image_paths")
             videos = collect("reference_video_urls", "reference_video_paths")
             audios = collect("reference_audio_urls", "reference_audio_paths")
             if len(images) > 9:
@@ -355,7 +386,8 @@ class SeedancePiAPI(BaseTool):
         probed = probe_output(output_path)
         usage = (task.get("meta") or {}).get("usage") or {}
         _write_sidecar(output_path, {
-            "prompt": inputs["prompt"],
+            "prompt": payload["input"]["prompt"],
+            "characters": list(inputs.get("characters") or []),
             "provider": "seedance",
             "gateway": "piapi",
             "model": task_type,

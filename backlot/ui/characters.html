@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Characters</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Characters</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/">Library</a>
+      <a href="/gallery">Gallery</a>
+      <a href="/characters" aria-current="page">Characters</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="g-layout">
+    <section class="g-list" aria-label="Danh sách nhân vật">
+      <div class="g-actions" style="margin:0 0 12px">
+        <button class="g-btn primary" type="button" id="newBtn">+ Nhân vật mới</button>
+      </div>
+      <div id="list"></div>
+      <p class="hint" id="empty" style="display:none">Chưa có nhân vật nào. Bấm “+ Nhân vật mới” để bắt đầu.</p>
+    </section>
+    <section class="g-detail" id="detail" aria-live="polite">
+      <p class="hint">Chọn một nhân vật ở bên trái.</p>
+    </section>
+  </div>
+</div>
+<script type="module" src="/ui/characters.js"></script>
+</body>
+</html>

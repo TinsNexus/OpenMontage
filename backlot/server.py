@@ -6,7 +6,8 @@ refetch state. The server never writes to project directories, with one
 explicit exception: user-triggered ``POST /api/social/...`` and
 ``POST /api/thumbs/...`` save social copy and thumbnails under
 ``projects/<id>/artifacts/{social,thumbs}/`` (see ``backlot.social`` and
-``backlot.thumbs``).
+``backlot.thumbs``). The ``/api/characters`` endpoints manage the shared
+character library outside ``projects/`` (see ``lib.characters``).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backlot import social, thumbs
+from lib import characters as charlib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -348,6 +350,220 @@ def create_app() -> FastAPI:
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+    # ---- Character library ---------------------------------------------
+
+    def _char_or_404(char_id: str) -> dict:
+        try:
+            return charlib.get(char_id)
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=404, detail=f"unknown character: {char_id}")
+
+    @app.get("/api/characters")
+    async def characters_list() -> list:
+        return await asyncio.to_thread(charlib.list_characters)
+
+    @app.get("/api/characters/roles")
+    async def character_roles() -> list:
+        return [{"id": k, "label": v} for k, v in charlib.ROLES.items()]
+
+    @app.get("/api/characters/sources")
+    async def character_sources() -> list:
+        """Images already in projects that can be saved into a character."""
+        def scan() -> list:
+            out = []
+            if not PROJECTS_DIR.is_dir():
+                return out
+            for project in sorted(p for p in PROJECTS_DIR.iterdir() if p.is_dir()):
+                for sub in ("assets/images", "artifacts/thumbs"):
+                    folder = project / sub
+                    if folder.is_dir():
+                        for img in sorted(folder.rglob("*")):
+                            if img.suffix.lower() in charlib.IMAGE_EXT and img.is_file():
+                                out.append({"project_id": project.name,
+                                            "path": img.relative_to(project).as_posix(),
+                                            "modified": img.stat().st_mtime})
+            out.sort(key=lambda x: x["modified"], reverse=True)
+            return out[:300]
+        return await asyncio.to_thread(scan)
+
+    @app.post("/api/characters")
+    async def character_create(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "character")
+        try:
+            return await asyncio.to_thread(
+                charlib.create, str(payload.get("name") or ""),
+                description=str(payload.get("description") or ""),
+                identity=str(payload.get("identity") or ""),
+                tags=[str(t) for t in (payload.get("tags") or [])],
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.post("/api/characters/{char_id}")
+    async def character_update(char_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "character")
+        _char_or_404(char_id)
+        try:
+            return await asyncio.to_thread(
+                charlib.update, char_id, name=payload.get("name"), description=payload.get("description"),
+                identity=payload.get("identity"), tags=payload.get("tags"),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.post("/api/characters/{char_id}/images")
+    async def character_add_image(char_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Add a reference image from a project file or an uploaded (base64) file."""
+        _require_action(request, "character")
+        _char_or_404(char_id)
+        note = str(payload.get("note") or "")
+        primary = bool(payload.get("make_primary"))
+        role = str(payload.get("role") or "other")
+        if role not in charlib.ROLES:
+            raise HTTPException(status_code=422, detail=f"role must be one of {list(charlib.ROLES)}")
+        if payload.get("project_id"):
+            project_dir = _safe_project_dir(str(payload["project_id"]))
+            src = (project_dir / str(payload.get("path") or "")).resolve()
+            try:
+                src.relative_to(project_dir.resolve())
+            except ValueError:
+                raise HTTPException(status_code=403, detail="path escapes project")
+            label = f"{payload['project_id']}/{payload.get('path')}"
+            try:
+                return await asyncio.to_thread(charlib.add_image, char_id, src, note=note,
+                                               source_label=label, make_primary=primary, role=role)
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=str(e))
+        if payload.get("data_base64"):
+            import base64
+            import tempfile
+
+            name = Path(str(payload.get("file_name") or "upload.png")).name
+            suffix = Path(name).suffix.lower()
+            if suffix not in charlib.IMAGE_EXT:
+                raise HTTPException(status_code=422, detail="upload must be png, jpg or webp")
+            raw = str(payload["data_base64"]).split(",", 1)[-1]
+            try:
+                data = base64.b64decode(raw, validate=True)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="data_base64 is not valid base64")
+            if len(data) > 20 * 1024 * 1024:
+                raise HTTPException(status_code=413, detail="image larger than 20 MB")
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / name
+                path.write_bytes(data)
+                try:
+                    return await asyncio.to_thread(charlib.add_image, char_id, path, note=note,
+                                                   source_label=f"upload:{name}", make_primary=primary,
+                                                   role=role)
+                except ValueError as e:
+                    raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail="give project_id + path, or file_name + data_base64")
+
+    @app.post("/api/characters/{char_id}/role")
+    async def character_role(char_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "character")
+        _char_or_404(char_id)
+        try:
+            return await asyncio.to_thread(charlib.set_role, char_id, str(payload.get("file") or ""),
+                                           str(payload.get("role") or ""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.post("/api/characters/{char_id}/split")
+    async def character_split(char_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Cut a sheet image of this character into one reference image per panel (role "other")."""
+        _require_action(request, "character")
+        _char_or_404(char_id)
+        file = str(payload.get("file") or "")
+        try:
+            n = int(payload["panels"]) if payload.get("panels") not in (None, "") else None
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="panels must be a number")
+        if n is not None and not 1 <= n <= 12:
+            raise HTTPException(status_code=422, detail="panels must be 1-12")
+
+        def run() -> dict:
+            import tempfile
+
+            sheet = charlib.image_path(char_id, file)
+            with tempfile.TemporaryDirectory() as tmp:
+                panels = charlib.split_sheet(sheet, tmp, panels=n)
+                char = None
+                for i, p in enumerate(panels, start=1):
+                    char = charlib.add_image(char_id, p["path"], note=f"cut from {file} panel {i}",
+                                             source_label=f"sheet:{file}#{i}", role="other")
+                return {**char, "split_panels": len(panels)}
+
+        try:
+            return await asyncio.to_thread(run)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="image not found")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.post("/api/characters/{char_id}/primary")
+    async def character_primary(char_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "character")
+        _char_or_404(char_id)
+        try:
+            return await asyncio.to_thread(charlib.set_primary, char_id, str(payload.get("file") or ""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.post("/api/characters/{char_id}/generate")
+    async def character_generate(char_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """New reference image via Nano Banana (~$0.03). Uses the primary image as identity anchor if any."""
+        _require_action(request, "character")
+        char = _char_or_404(char_id)
+        prompt = str(payload.get("prompt") or "").strip()
+        if not prompt:
+            raise HTTPException(status_code=422, detail="prompt is required")
+        role = str(payload.get("role") or "other")
+        if role not in charlib.ROLES:
+            raise HTTPException(status_code=422, detail=f"role must be one of {list(charlib.ROLES)}")
+
+        def run() -> dict:
+            import tempfile
+
+            from tools.graphics.piapi_image import PiAPIImage
+
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "gen.png"
+                resolution = str(payload.get("resolution") or "1K")
+                if resolution not in ("1K", "2K", "4K"):
+                    raise ValueError("resolution must be 1K, 2K or 4K")
+                inputs = {"prompt": prompt, "aspect_ratio": str(payload.get("aspect") or "3:4"),
+                          "resolution": resolution, "output_format": "png", "output_path": str(out)}
+                if char.get("primary_path"):
+                    # New single angles are anchored on the primary image only, so they
+                    # don't inherit drift from other generated references; a sheet
+                    # gets the whole set so every view agrees.
+                    inputs["characters"] = [char_id]
+                    inputs["character_refs"] = "set" if role == "sheet" else "primary"
+                else:
+                    inputs["prompt"] = f"{char['name']}: {char.get('identity') or char.get('description') or ''}\n\n{prompt}"
+                result = PiAPIImage().execute(inputs)
+                if not result.success:
+                    raise RuntimeError(result.error or "image generation failed")
+                return charlib.add_image(char_id, out, note=prompt[:300], source_label="ai:nano-banana-2.1",
+                                         make_primary=bool(payload.get("make_primary")), role=role)
+
+        try:
+            return await asyncio.to_thread(run)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.get("/character-media/{char_id}/{file}")
+    async def character_media(char_id: str, file: str) -> FileResponse:
+        try:
+            path = await asyncio.to_thread(charlib.image_path, char_id, file)
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=404, detail="image not found")
+        return FileResponse(path)
+
     # ---- UI ------------------------------------------------------------
 
     @app.get("/p/{project_id}")
@@ -357,6 +573,10 @@ def create_app() -> FastAPI:
     @app.get("/p/{project_path:path}")
     async def board_page_path(project_path: str) -> HTMLResponse:
         return _ui_html("board.html", ("board.css", "board.js"))
+
+    @app.get("/characters")
+    async def characters_page() -> HTMLResponse:
+        return _ui_html("characters.html", ("board.css", "gallery.css", "characters.js"))
 
     @app.get("/gallery")
     async def gallery_page() -> HTMLResponse:
@@ -377,7 +597,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/characters") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
