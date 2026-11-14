@@ -101,3 +101,6 @@ venv/
 
 # Backlot local cache (thumbnails)
 .backlot/
+
+# Content backlog (ideas + script pointers; personal, see lib/backlog.py)
+/backlog/

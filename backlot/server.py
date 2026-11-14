@@ -9,7 +9,8 @@ explicit exception: user-triggered ``POST /api/social/...`` and
 ``backlot.thumbs``), and ``POST /api/images/...`` saves generated images
 into ``projects/<id>/assets/images/`` (see ``backlot.images``). The
 ``/api/characters`` endpoints manage the shared character library outside
-``projects/`` (see ``lib.characters``).
+``projects/`` (see ``lib.characters``), and ``/api/backlog`` edits the
+content backlog file (see ``lib.backlog``).
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backlot import images as imagegen, social, thumbs
-from lib import characters as charlib
+from lib import backlog as backloglib, characters as charlib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -444,6 +445,44 @@ def create_app() -> FastAPI:
             except RuntimeError as e:
                 raise HTTPException(status_code=502, detail=str(e))
 
+    # ---- Backlog -------------------------------------------------------
+
+    def _backlog_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e).strip("'\""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.get("/api/backlog")
+    async def backlog_list() -> dict:
+        items = await asyncio.to_thread(_backlog_call, backloglib.list_items)
+        return {"items": items, "statuses": backloglib.statuses()}
+
+    @app.get("/api/backlog/{item_id}/script")
+    async def backlog_script(item_id: str) -> dict:
+        text = await asyncio.to_thread(_backlog_call, backloglib.read_script, item_id)
+        return {"id": item_id, "text": text}
+
+    @app.post("/api/backlog")
+    async def backlog_create(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "backlog")
+        fields = {k: v for k, v in payload.items() if k != "title"}
+        return await asyncio.to_thread(_backlog_call, backloglib.create,
+                                       str(payload.get("title") or ""), **fields)
+
+    @app.post("/api/backlog/{item_id}")
+    async def backlog_update(item_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "backlog")
+        return await asyncio.to_thread(_backlog_call, backloglib.update, item_id, **payload)
+
+    @app.post("/api/backlog/{item_id}/delete")
+    async def backlog_delete(item_id: str, request: Request) -> dict:
+        _require_action(request, "backlog")
+        await asyncio.to_thread(_backlog_call, backloglib.delete, item_id)
+        return {"deleted": item_id}
+
     # ---- Character library ---------------------------------------------
 
     def _char_or_404(char_id: str) -> dict:
@@ -676,6 +715,10 @@ def create_app() -> FastAPI:
     async def characters_page() -> HTMLResponse:
         return _ui_html("characters.html", ("board.css", "gallery.css", "characters.js"))
 
+    @app.get("/backlog")
+    async def backlog_page() -> HTMLResponse:
+        return _ui_html("backlog.html", ("board.css", "gallery.css", "backlog.css", "backlog.js"))
+
     @app.get("/gallery")
     async def gallery_page() -> HTMLResponse:
         return _ui_html("gallery.html", ("board.css", "gallery.css", "gallery.js"))
@@ -695,7 +738,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery", "/images", "/characters") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/images", "/characters", "/backlog") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
