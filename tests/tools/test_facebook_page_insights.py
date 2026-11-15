@@ -48,6 +48,8 @@ def graph(monkeypatch):
     for k in ("FACEBOOK_PAGE_ID", "FACEBOOK_APP_SECRET", "FACEBOOK_GRAPH_API_VERSION"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("FACEBOOK_PAGE_ACCESS_TOKEN", TOKEN)
+    # Default: a Page token (User-only edge /me/accounts does not exist).
+    routes["me/accounts"] = _err(100, "(#100) Tried accessing nonexisting field (accounts)")
     return calls, routes
 
 
@@ -252,3 +254,71 @@ def test_reels_stop_paginating_before_window(graph):
     assert result.success, result.error
     assert [r["id"] for r in result.data["reels"]] == ["new"]
     assert not any(u == next_url for u, _ in calls)
+
+
+PAGE_TOKEN = "EAApage-token-for-tisorr"
+
+
+def test_user_token_without_page_id_lists_pages(graph):
+    calls, routes = graph
+    routes["me/accounts"] = _Resp({"data": [
+        {"id": "111", "name": "Tisorr", "access_token": PAGE_TOKEN},
+        {"id": "222", "name": "BingeBox", "access_token": "other"},
+    ]})
+
+    result = _tool().execute({"operation": "posts"})
+
+    assert not result.success
+    assert "User token" in result.error and "Tisorr (111)" in result.error
+    assert PAGE_TOKEN not in result.error
+
+
+def test_user_token_switches_to_page_token(graph, monkeypatch):
+    calls, routes = graph
+    monkeypatch.setenv("FACEBOOK_PAGE_ID", "111")
+    routes["me/accounts"] = _Resp({"data": [{"id": "111", "name": "Tisorr", "access_token": PAGE_TOKEN}]})
+    routes["111/posts"] = _Resp({"data": []})
+
+    result = _tool().execute({"operation": "posts"})
+
+    assert result.success, result.error
+    posts_call = next(p for u, p in calls if u.endswith("111/posts"))
+    assert posts_call["access_token"] == PAGE_TOKEN
+    assert PAGE_TOKEN not in json.dumps(result.data)
+
+
+def test_user_token_with_unknown_page_id(graph, monkeypatch):
+    calls, routes = graph
+    monkeypatch.setenv("FACEBOOK_PAGE_ID", "999")
+    routes["me/accounts"] = _Resp({"data": [{"id": "111", "name": "Tisorr", "access_token": PAGE_TOKEN}]})
+
+    result = _tool().execute({"operation": "posts"})
+
+    assert not result.success and "999" in result.error and "Tisorr" in result.error
+
+
+def test_probe_survives_missing_reels_edge(graph):
+    calls, routes = graph
+    routes["me"] = _Resp({"id": "123"})
+    routes["123/insights"] = _Resp({"data": []})
+    routes["123/posts"] = _Resp({"data": []})
+    routes["123/video_reels"] = _err(100, "(#100) Tried accessing nonexisting field (video_reels)")
+
+    result = _tool().execute({"operation": "probe_metrics", "page_metrics": ["page_post_engagements"]})
+
+    assert result.success, result.error
+    assert result.data["probe"]["page"]["accepted"] == ["page_post_engagements"]
+    assert "video_reels" in result.data["probe"]["reel"]["error"]
+
+
+def test_snapshot_metric_total_is_latest_value(graph, monkeypatch):
+    calls, routes = graph
+    monkeypatch.setenv("FACEBOOK_PAGE_ID", "123")
+    routes["123"] = _Resp({"id": "123", "name": "My Page"})
+    routes["123/insights"] = _Resp({"data": [{"name": "page_follows", "values": [
+        {"end_time": "2026-11-0%dT08:00:00+0000" % d, "value": v} for d, v in ((1, 7), (2, 8), (3, 13))]}]})
+
+    result = _tool().execute({"operation": "page_overview", "since": "2026-11-01",
+                              "until": "2026-11-04", "page_metrics": ["page_follows"]})
+
+    assert result.data["page_insights"]["totals"]["page_follows"] == 13

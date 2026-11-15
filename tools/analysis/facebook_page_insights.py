@@ -85,11 +85,20 @@ POST_FIELDS = (
     "comments.summary(total_count).limit(0),"
     "attachments{media_type,type}"
 )
-REEL_FIELDS = "id,description,title,created_time,permalink_url,length"
+POST_FIELDS_NO_USER_CONTENT = (
+    "id,message,created_time,permalink_url,status_type,shares,attachments{media_type,type}"
+)
+REEL_FIELDS ="id,description,title,created_time,permalink_url,length"
 PAGE_FIELDS = "id,name,fan_count,followers_count,category,link"
+
+# Daily snapshots of a running count: the period total is the last value, not the sum.
+SNAPSHOT_METRICS = {"page_follows", "page_fans"}
 
 RATE_LIMIT_CODES = {4, 17, 32, 613, 80001}
 INVALID_METRIC_CODE = 100
+# Codes an insights call returns for a bad metric name: 100 normally, and 1
+# ("unknown error") for some metrics that are not valid on that object type.
+METRIC_ERROR_CODES = {100, 1}
 TOKEN_ERROR_CODE = 190
 MAX_INSIGHTS_WINDOW_DAYS = 90  # day-period insights accept at most ~93 days
 
@@ -218,6 +227,9 @@ class FacebookPageInsights(BaseTool):
     # ------------------------------------------------------------------ #
 
     def _token(self) -> str:
+        override = getattr(self, "_page_token", None)
+        if override:
+            return override
         token = os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN", "").strip()
         if not token:
             raise GraphAPIError("FACEBOOK_PAGE_ACCESS_TOKEN is not set.")
@@ -320,18 +332,18 @@ class FacebookPageInsights(BaseTool):
         try:
             return self._get(path, {**extra, "metric": ",".join(wanted)}).get("data") or []
         except GraphAPIError as exc:
-            if exc.code != INVALID_METRIC_CODE or len(wanted) == 1:
-                if exc.code == INVALID_METRIC_CODE:
-                    rejected[wanted[0]] = str(exc)
-                    return []
+            if exc.code not in METRIC_ERROR_CODES:
                 raise
+            if len(wanted) == 1:
+                rejected[wanted[0]] = str(exc)
+                return []
         data: list[dict[str, Any]] = []
         failed = 0
         for metric in wanted:
             try:
                 data.extend(self._get(path, {**extra, "metric": metric}).get("data") or [])
             except GraphAPIError as exc:
-                if exc.code != INVALID_METRIC_CODE:
+                if exc.code not in METRIC_ERROR_CODES:
                     raise
                 rejected[metric] = str(exc)
                 failed += 1
@@ -391,14 +403,50 @@ class FacebookPageInsights(BaseTool):
     # Operations
     # ------------------------------------------------------------------ #
 
+    def _managed_pages(self) -> Optional[list[dict[str, Any]]]:
+        """Pages the token's user manages, or None when the token is a Page token.
+
+        /me/accounts only exists on User nodes, so a Page token gets code 100.
+        """
+        try:
+            return self._paginate("me/accounts", {"fields": "id,name,access_token", "limit": 100}, 500)
+        except GraphAPIError as exc:
+            if exc.code == INVALID_METRIC_CODE:
+                return None
+            raise
+
     def _page_id(self) -> str:
+        """Resolve the Page id, switching to that Page's token if given a User token."""
+        self._page_token = None
         page_id = os.environ.get("FACEBOOK_PAGE_ID", "").strip()
-        if page_id:
-            return page_id
-        me = self._get("me", {"fields": "id,name"})
-        if not me.get("id"):
-            raise GraphAPIError("Could not resolve the Page id from /me; set FACEBOOK_PAGE_ID.")
-        return me["id"]
+        pages = self._managed_pages()
+
+        if pages is None:  # already a Page token
+            if page_id:
+                return page_id
+            me = self._get("me", {"fields": "id,name"})
+            if not me.get("id"):
+                raise GraphAPIError("Could not resolve the Page id from /me; set FACEBOOK_PAGE_ID.")
+            return me["id"]
+
+        listing = ", ".join(f"{p.get('name')} ({p.get('id')})" for p in pages) or "none"
+        if not page_id:
+            raise GraphAPIError(
+                "FACEBOOK_PAGE_ACCESS_TOKEN is a User token, not a Page token. Set "
+                f"FACEBOOK_PAGE_ID in .env to one of the Pages it manages: {listing}."
+            )
+        match = next((p for p in pages if p.get("id") == page_id), None)
+        if match is None:
+            raise GraphAPIError(
+                f"FACEBOOK_PAGE_ID={page_id} is not among the Pages this token manages: {listing}."
+            )
+        if not match.get("access_token"):
+            raise GraphAPIError(
+                f"No Page token returned for {match.get('name')}; the user token needs "
+                "pages_show_list and pages_read_engagement."
+            )
+        self._page_token = match["access_token"]
+        return page_id
 
     def _page_overview(self, page_id: str, inputs: dict[str, Any],
                        rejected: dict[str, str]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -429,7 +477,7 @@ class FacebookPageInsights(BaseTool):
         for name, points in series.items():
             numeric = [p["value"] for p in points if isinstance(p["value"], (int, float))]
             if numeric:
-                totals[name] = sum(numeric)
+                totals[name] = numeric[-1] if name in SNAPSHOT_METRICS else sum(numeric)
         page_insights = {
             "since": since.date().isoformat(),
             "until": until.date().isoformat(),
@@ -441,20 +489,50 @@ class FacebookPageInsights(BaseTool):
     def _posts(self, page_id: str, inputs: dict[str, Any],
                rejected: dict[str, str]) -> list[dict[str, Any]]:
         since, until = self._window(inputs)
-        raw = self._paginate(
-            f"{page_id}/posts",
-            {"fields": POST_FIELDS, "since": int(since.timestamp()),
-             "until": int(until.timestamp()), "limit": 100},
-            int(inputs.get("max_items", 100)),
-        )
-        metrics = inputs.get("post_metrics") or DEFAULT_POST_METRICS
+        params = {"fields": POST_FIELDS, "since": int(since.timestamp()),
+                  "until": int(until.timestamp()), "limit": 100}
+        max_items = int(inputs.get("max_items", 100))
+        metrics = list(inputs.get("post_metrics") or DEFAULT_POST_METRICS)
         with_insights = inputs.get("include_post_insights", True)
+        try:
+            raw = self._paginate(f"{page_id}/posts", params, max_items)
+            counts_from_insights = False
+        except GraphAPIError as exc:
+            # reactions/comments summaries need pages_read_user_content; fall
+            # back to engagement insights, which only need read_insights.
+            if exc.code != 10 or "pages_read_user_content" not in str(exc):
+                raise
+            params["fields"] = POST_FIELDS_NO_USER_CONTENT
+            raw = self._paginate(f"{page_id}/posts", params, max_items)
+            counts_from_insights = True
+            with_insights = True
+            for m in ("post_reactions_by_type_total", "post_activity_by_action_type"):
+                if m not in metrics:
+                    metrics.append(m)
+            self._warnings.append(
+                "Token lacks pages_read_user_content, so reaction/comment counts come "
+                "from post insights (post_reactions_by_type_total, "
+                "post_activity_by_action_type). Add that permission for exact counts."
+            )
         posts = []
         for p in raw:
             attachments = ((p.get("attachments") or {}).get("data") or [{}])
             reactions = ((p.get("reactions") or {}).get("summary") or {}).get("total_count", 0)
             comments = ((p.get("comments") or {}).get("summary") or {}).get("total_count", 0)
             shares = (p.get("shares") or {}).get("count", 0)
+            insights: Optional[dict[str, Any]] = None
+            if with_insights and p.get("id"):
+                insights = self._lifetime_values(
+                    self._insights(f"{p['id']}/insights", metrics, {}, rejected)
+                )
+            if counts_from_insights and insights:
+                by_type = insights.get("post_reactions_by_type_total")
+                if isinstance(by_type, dict):
+                    reactions = sum(v for v in by_type.values() if isinstance(v, (int, float)))
+                activity = insights.get("post_activity_by_action_type")
+                if isinstance(activity, dict):
+                    comments = activity.get("comment", comments) or 0
+                    shares = max(shares, activity.get("share", 0) or 0)
             item = {
                 "id": p.get("id"),
                 "created_time": p.get("created_time"),
@@ -467,10 +545,8 @@ class FacebookPageInsights(BaseTool):
                 "shares": shares,
                 "engagement": reactions + comments + shares,
             }
-            if with_insights and p.get("id"):
-                item["insights"] = self._lifetime_values(
-                    self._insights(f"{p['id']}/insights", metrics, {}, rejected)
-                )
+            if insights is not None:
+                item["insights"] = insights
             posts.append(item)
         return posts
 
@@ -534,16 +610,21 @@ class FacebookPageInsights(BaseTool):
             f"{page_id}/insights", inputs.get("page_metrics") or DEFAULT_PAGE_METRICS,
             {"period": "day", "since": int(since.timestamp()), "until": int(until.timestamp())},
         )
-        posts = self._get(f"{page_id}/posts", {"fields": "id", "limit": 1}).get("data") or []
-        if posts:
-            result["post"] = probe(
-                f"{posts[0]['id']}/insights", inputs.get("post_metrics") or DEFAULT_POST_METRICS, {}
-            )
-        reels = self._get(f"{page_id}/video_reels", {"fields": "id", "limit": 1}).get("data") or []
-        if reels:
-            result["reel"] = probe(
-                f"{reels[0]['id']}/video_insights", inputs.get("reel_metrics") or DEFAULT_REEL_METRICS, {}
-            )
+        for key, edge, insights_edge, metrics in (
+            ("post", "posts", "insights", inputs.get("post_metrics") or DEFAULT_POST_METRICS),
+            ("reel", "video_reels", "video_insights", inputs.get("reel_metrics") or DEFAULT_REEL_METRICS),
+        ):
+            try:
+                latest = self._get(f"{page_id}/{edge}", {"fields": "id", "limit": 1}).get("data") or []
+            except GraphAPIError as exc:
+                if exc.code == TOKEN_ERROR_CODE:
+                    raise
+                result[key] = {"error": str(exc)}
+                continue
+            if latest:
+                result[key] = probe(f"{latest[0]['id']}/{insights_edge}", metrics, {})
+            else:
+                result[key] = {"error": f"no {edge} found to probe"}
         return result
 
     # ------------------------------------------------------------------ #
@@ -633,7 +714,7 @@ class FacebookPageInsights(BaseTool):
         totals = page_insights.get("totals") or {}
         if totals:
             lines += ["", "## Page totals", "", "| Metric | Total |", "|---|---|"]
-            lines += [f"| {k} | {v} |" for k, v in totals.items()]
+            lines += [f"| {k}{' (latest)' if k in SNAPSHOT_METRICS else ''} | {v} |" for k, v in totals.items()]
 
         posts = summary.get("posts")
         if posts:
