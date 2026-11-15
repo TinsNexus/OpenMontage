@@ -44,7 +44,7 @@ _TASK_TYPES = {
 
 # USD per output second, by task_type and resolution (PiAPI published pricing).
 _PRICING = {
-    "seedance-2.5": {"480p": 0.30, "720p": 0.60},
+    "seedance-2.5": {"480p": 0.15, "720p": 0.35, "1080p": 0.80},
     "seedance-2": {"480p": 0.10, "720p": 0.20, "1080p": 0.50},
     "seedance-2-fast": {"480p": 0.048, "720p": 0.096},
     "seedance-2-mini": {"480p": 0.042, "720p": 0.084},
@@ -148,7 +148,7 @@ class SeedancePiAPI(BaseTool):
                 "type": "string",
                 "enum": ["480p", "720p", "1080p"],
                 "default": "720p",
-                "description": "1080p only on Seedance 2 standard tiers.",
+                "description": "1080p only on Seedance 2.5 and Seedance 2 standard tiers.",
             },
             "generate_audio": {
                 "type": "boolean",

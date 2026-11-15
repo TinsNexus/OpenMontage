@@ -79,9 +79,10 @@ def test_status_follows_api_key(monkeypatch):
 
 def test_cost_matches_piapi_pricing(monkeypatch):
     t = _tool(monkeypatch)
-    assert t.estimate_cost({"prompt": "x", "model_variant": "2.5", "duration": 10, "resolution": "720p"}) == 6.0
+    assert t.estimate_cost({"prompt": "x", "model_variant": "2.5", "duration": 10, "resolution": "720p"}) == 3.5
     assert t.estimate_cost({"prompt": "x", "model_variant": "standard", "duration": 10}) == 2.0
     assert t.estimate_cost({"prompt": "x", "model_variant": "fast", "duration": 5, "resolution": "480p"}) == 0.24
+    assert t.estimate_cost({"prompt": "x", "model_variant": "2.5", "duration": 6, "resolution": "1080p"}) == 4.8
 
 
 def test_payload_text_to_video_25(monkeypatch):
@@ -107,7 +108,6 @@ def test_payload_text_to_video_25(monkeypatch):
     "inputs, msg",
     [
         ({"model_variant": "standard", "duration": 20}, "4-15"),
-        ({"model_variant": "2.5", "resolution": "1080p"}, "does not support 1080p"),
         ({"model_variant": "fast", "resolution": "1080p"}, "does not support 1080p"),
         ({"model_variant": "2.5", "less_restriction": True}, "not available for Seedance 2.5"),
         ({"operation": "reference_to_video"}, "1-15 references"),
@@ -170,7 +170,7 @@ def test_execute_create_poll_download(monkeypatch, tmp_path, fake_requests):
     assert out.read_bytes() == b"MP4DATA"
     assert r.data["task_id"] == "t-1"
     assert r.data["model"] == "seedance-2.5"
-    assert r.cost_usd == 6.0
+    assert r.cost_usd == 3.5
     create_url, kw = calls["post"][0]
     assert create_url == "https://api.piapi.ai/api/v1/task"
     assert kw["headers"]["X-API-Key"] == "test-piapi-key"
@@ -181,7 +181,7 @@ def test_execute_create_poll_download(monkeypatch, tmp_path, fake_requests):
     assert meta["prompt"] == "x"
     assert meta["model"] == "seedance-2.5"
     assert meta["task_id"] == "t-1"
-    assert meta["cost_usd"] == 6.0
+    assert meta["cost_usd"] == 3.5
 
 
 def test_execute_reports_failed_task(monkeypatch, tmp_path, fake_requests):
