@@ -44,6 +44,8 @@ def options() -> dict[str, Any]:
 
 def list_images(projects_dir: Path, limit: int = 400) -> list[dict[str, Any]]:
     """Images in every project's assets/images, newest first, with their sidecar metadata."""
+    from backlot.social import social_path
+
     out: list[dict[str, Any]] = []
     if not projects_dir.is_dir():
         return out
@@ -68,6 +70,7 @@ def list_images(projects_dir: Path, limit: int = 400) -> list[dict[str, Any]]:
                 "references": meta.get("references") or [],
                 "cost_usd": meta.get("cost_usd"),
                 "generated": bool(meta),
+                "social": _read_json(social_path(project, img.relative_to(project).as_posix())) or None,
             })
     out.sort(key=lambda x: x["modified"], reverse=True)
     return out[:limit]

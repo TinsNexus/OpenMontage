@@ -1,7 +1,8 @@
-import { el, fmtAgo, getJSON, mediaURL, subscribe, thumbURL } from "/ui/lib.js";
+import { copyBtn, el, fmtAgo, getJSON, mediaURL, subscribe, thumbURL } from "/ui/lib.js";
 
 const THEME_KEY = "backlot.theme";
 const FORM_KEY = "backlot.images.form";
+const CAP_KEY = "backlot.images.caption";
 const formEl = document.getElementById("form");
 const resultsEl = document.getElementById("results");
 const filterEl = document.getElementById("filter");
@@ -218,11 +219,109 @@ function renderResults() {
             renderForm(); window.scrollTo({ top: 0, behavior: "smooth" });
           } }, "Dùng làm tham chiếu"),
           el("a", { class: "g-btn", href: mediaURL(img.project_id, img.path), download: img.name }, "Tải"),
+          el("button", { class: img.social ? "g-btn done" : "g-btn", type: "button", onclick: () => openCaption(img) },
+            img.social ? "✓ Caption" : "Viết caption"),
         ),
         charSel ? el("div", { class: "g-actions", style: "margin:6px 0 0;gap:6px" }, charSel, saveBtn) : null,
       ),
     ));
   }
+}
+
+// ---------------------------------------------------------------- captions
+
+let dialog = null;
+function capPrefs() {
+  try { return { platform: "facebook_post", language: "vi", ...JSON.parse(storageGet(CAP_KEY) || "{}") }; }
+  catch { return { platform: "facebook_post", language: "vi" }; }
+}
+
+function captionOutput(s) {
+  if (!s || !s.caption) return el("p", { class: "hint" }, "Chưa có caption cho ảnh này.");
+  const tagsText = (s.hashtags || []).join(" ");
+  const options = (s.captions && s.captions.length ? s.captions : [s.caption]);
+  const platformLabel = (opts.caption_platforms.find((p) => p.id === s.platform) || {}).label || s.platform;
+  return el("div", { class: "g-out" },
+    el("div", {},
+      el("h4", {}, `Caption (${options.length} phương án)`),
+      options.map((c, i) => {
+        const ta = el("textarea", { "aria-label": `Caption phương án ${i + 1}` });
+        ta.value = c;
+        return el("div", { class: "g-row", style: "margin-bottom:8px" }, ta,
+          el("div", { style: "display:flex;flex-direction:column;gap:6px" },
+            copyBtn(() => ta.value),
+            copyBtn(() => `${ta.value}\n\n${tagsText}`, "Copy + hashtag")));
+      })),
+    tagsText ? el("div", {}, el("h4", {}, "Hashtag"),
+      el("div", { class: "g-row" }, el("div", { class: "g-tags" }, s.hashtags.map((t) => el("span", { class: "chip" }, t))),
+        copyBtn(() => tagsText))) : null,
+    s.alt_text ? el("div", {}, el("h4", {}, "Alt text (mô tả ảnh cho người khiếm thị)"),
+      el("div", { class: "g-row" }, el("div", { class: "g-title" }, s.alt_text), copyBtn(() => s.alt_text))) : null,
+    el("p", { class: "g-stamp" },
+      `${platformLabel} · ${s.model}${s.vision ? " · đã nhìn ảnh" : " · viết từ prompt (không gửi được ảnh)"} · ${fmtAgo(s.created_at)}`),
+    s.history && s.history.length ? el("details", { class: "g-history" },
+      el("summary", {}, `Các bản trước (${s.history.length})`),
+      s.history.slice().reverse().map((h) => el("div", { class: "g-hist-item" },
+        el("p", {}, h.caption), el("p", { class: "g-stamp" }, (h.hashtags || []).join(" "))))) : null,
+  );
+}
+
+function openCaption(img) {
+  if (!dialog) {
+    dialog = el("dialog", { class: "g-dialog", "aria-label": "Viết caption cho ảnh" });
+    dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+    document.body.append(dialog);
+  }
+  const prefs = capPrefs();
+  const platform = el("select", { id: "c-platform" }, opts.caption_platforms.map((p) => el("option", { value: p.id }, p.label)));
+  platform.value = prefs.platform;
+  const language = el("select", { id: "c-lang" }, opts.caption_languages.map((l) => el("option", { value: l.id }, l.label)));
+  language.value = prefs.language;
+  const notes = el("textarea", { id: "c-notes", placeholder: "Ghi chú (không bắt buộc): bối cảnh, mục tiêu bài đăng, giọng văn, CTA…" });
+  notes.value = (img.social && img.social.notes) || "";
+  const aiBox = el("input", { type: "checkbox", id: "c-ai" });
+  aiBox.checked = img.social && img.social.ai_generated != null ? img.social.ai_generated : true;
+  const out = el("div", {}, captionOutput(img.social));
+  const err = el("div", { class: "g-error", role: "alert" });
+  const go = el("button", { class: "g-btn primary", type: "button" }, img.social ? "Viết lại" : "Viết caption");
+  go.addEventListener("click", async () => {
+    err.textContent = ""; go.disabled = true; go.textContent = "Đang viết…";
+    storageSet(CAP_KEY, JSON.stringify({ platform: platform.value, language: language.value }));
+    try {
+      const res = await fetch("/api/images/caption", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Backlot-Action": "social" },
+        body: JSON.stringify({ project_id: img.project_id, path: img.path, platform: platform.value,
+          language: language.value, notes: notes.value, ai_generated: aiBox.checked }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      img.social = data;
+      out.innerHTML = ""; out.append(captionOutput(data));
+      renderResults();
+    } catch (e) { err.textContent = `Không viết được: ${e.message}`; }
+    go.disabled = false; go.textContent = "Viết lại";
+  });
+  const close = el("button", { class: "g-btn g-dialog-close", type: "button", "aria-label": "Đóng" }, "Đóng");
+  close.addEventListener("click", () => dialog.close());
+
+  dialog.innerHTML = "";
+  dialog.append(el("div", { class: "g-dialog-body" },
+    close,
+    el("div", { class: "g-card-h" }, el("h3", {}, "Caption cho ảnh")),
+    el("div", { class: "g-dialog-top" },
+      el("img", { src: thumbURL(img.project_id, img.path, 640), alt: img.prompt || img.name }),
+      el("div", {},
+        el("div", { class: "g-form" },
+          el("label", { for: "c-platform" }, "Nền tảng", platform),
+          el("label", { for: "c-lang" }, "Ngôn ngữ", language),
+          el("label", { class: "full", for: "c-notes" }, "Ghi chú cho AI", notes),
+          el("label", { class: "full", for: "c-ai", style: "flex-direction:row;align-items:center;gap:8px" },
+            aiBox, "Ảnh tạo bằng AI (thêm dòng ghi chú AI vào caption)")),
+        el("div", { class: "g-actions" }, go,
+          el("span", { class: "g-cost" }, `${opts.caption_model} qua PiAPI · AI nhìn ảnh để viết`)),
+        err)),
+    out));
+  dialog.showModal();
 }
 
 // ---------------------------------------------------------------- boot
