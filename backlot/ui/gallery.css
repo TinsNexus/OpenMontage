@@ -136,3 +136,19 @@
 .g-history summary { cursor: pointer; font-size: calc(12px * var(--fs-scale)); color: var(--text-2); }
 .g-history .g-hist-item { border-top: 1px solid var(--border-soft); padding: 10px 0; font-size: calc(12.5px * var(--fs-scale)); }
 .g-history .g-hist-item p { margin: 4px 0; white-space: pre-wrap; }
+
+/* Upload (videos made outside OpenMontage) */
+.g-upload {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px;
+  padding: 12px; border: 1px dashed var(--border); border-radius: 10px; background: var(--surface);
+  transition: border-color .15s, background .15s;
+}
+.g-upload.over { border-color: var(--amber); background: var(--amber-dim); }
+.g-upload label.g-btn { cursor: pointer; }
+.g-upload .g-cost { flex: 1 1 160px; min-width: 0; }
+.g-upload .g-cost.err { color: var(--red, #e5484d); }
+.g-progress { flex-basis: 100%; height: 4px; border-radius: 2px; background: var(--border-soft); overflow: hidden; }
+.g-progress > div { height: 100%; width: 0; background: var(--amber); transition: width .2s; }
+.g-form label.g-check, .g-check { display: flex; flex-direction: row; align-items: center; gap: 8px; cursor: pointer; }
+.g-check input { width: auto; margin: 0; }
+.g-transcript { white-space: pre-wrap; margin: 0; font-size: calc(12.5px * var(--fs-scale)); color: var(--text-2); line-height: 1.55; }

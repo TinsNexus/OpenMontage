@@ -61,12 +61,13 @@ function renderList() {
     },
       el("div", { class: "g-thumb" }, el("img", { src: thumbURL(v.project_id, v.path, 320), loading: "lazy", alt: "" })),
       el("div", {},
-        el("h3", {}, v.project_title),
-        el("div", { class: "g-sub" }, v.path),
+        el("h3", {}, v.uploaded ? (v.original_name || v.name) : v.project_title),
+        el("div", { class: "g-sub" }, v.uploaded ? "Video tải lên" : v.path),
         el("div", { class: "g-chips" },
-          el("span", { class: "chip" }, v.kind === "render" ? "render" : "clip"),
+          v.uploaded ? el("span", { class: "chip" }, "tải lên")
+            : el("span", { class: "chip" }, v.kind === "render" ? "render" : "clip"),
           v.social ? el("span", { class: "chip ok" }, "có caption") : null,
-          v.prompt ? null : el("span", { class: "chip warn" }, "không có prompt"),
+          v.prompt || v.uploaded ? null : el("span", { class: "chip warn" }, "không có prompt"),
           el("span", { class: "chip" }, fmtAgo(v.modified)),
         ),
       ),
@@ -99,10 +100,27 @@ function renderDetail() {
     durChip.textContent = `${video.duration.toFixed(1)}s · ${video.videoWidth}×${video.videoHeight}`;
   });
 
+  let delBtn = null;
+  if (v.uploaded) {
+    delBtn = el("button", { class: "g-btn", type: "button" }, "Xoá video tải lên");
+    delBtn.addEventListener("click", async () => {
+      if (!confirm(`Xoá “${v.original_name || v.name}” và caption đã tạo? Không hoàn tác được.`)) return;
+      delBtn.disabled = true;
+      try {
+        await postJSON("/api/social-upload/delete", "upload", { video: v.path });
+        selectedKey = null;
+        await load();
+      } catch (e) {
+        delBtn.disabled = false;
+        alert(`Không xoá được: ${e.message}`);
+      }
+    });
+  }
+
   detailEl.append(
     el("div", { class: "g-player" }, video),
     el("div", { class: "g-head" },
-      el("h2", {}, v.project_title),
+      el("h2", {}, v.uploaded ? (v.original_name || v.name) : v.project_title),
       el("a", { class: "g-sub", href: mediaURL(v.project_id, v.path), download: v.name }, `${v.path} ↓`),
     ),
     el("div", { class: "g-meta" },
@@ -110,12 +128,28 @@ function renderDetail() {
       el("span", { class: "chip" }, fmtMB(v.size_bytes)),
       v.model ? el("span", { class: "chip" }, v.model) : null,
       v.cost_usd != null ? el("span", { class: "chip" }, `$${Number(v.cost_usd).toFixed(2)}`) : null,
-      el("a", { class: "chip", href: `/p/${encodeURIComponent(v.project_id)}`, style: "text-decoration:none" }, "Mở board ↗"),
+      v.uploaded ? delBtn
+        : el("a", { class: "chip", href: `/p/${encodeURIComponent(v.project_id)}`, style: "text-decoration:none" }, "Mở board ↗"),
     ),
-    promptCard(v),
+    v.prompt ? promptCard(v) : readingCard(v),
     socialCard(v),
     thumbCard(v, video),
   );
+}
+
+// A video with no generation prompt is read instead: sampled frames + speech transcript.
+function readingCard(v) {
+  const card = el("div", { class: "g-card", id: "reading-card" });
+  card.append(el("div", { class: "g-card-h" }, el("h3", {}, "AI đọc video"), el("span", { class: "spacer" })));
+  card.append(el("p", { class: "hint" }, v.uploaded
+    ? "Video này không có prompt. Khi tạo caption, AI sẽ xem 4–10 khung hình rải đều trong video và nghe lời thoại (chép lời bằng Whisper ngay trên máy)."
+    : "Không tìm thấy prompt cho video này, nên AI sẽ xem các khung hình và nghe lời thoại thay vào đó."));
+  if (v.transcript) {
+    card.append(el("h4", {}, "Lời thoại đã chép"), el("p", { class: "g-transcript" }, v.transcript));
+  } else if (v.transcript === "") {
+    card.append(el("p", { class: "hint" }, "Không nghe thấy lời thoại trong video."));
+  }
+  return card;
 }
 
 function promptCard(v) {
@@ -155,6 +189,8 @@ function socialCard(v) {
   platform.value = v.social?.platform || saved.platform || "facebook_reels";
   language.value = v.social?.language || saved.language || "vi";
   notes.value = v.social?.notes ?? saved.notes ?? "";
+  const aiMade = el("input", { id: "f-ai", type: "checkbox" });
+  aiMade.checked = v.social?.ai_generated ?? !v.uploaded;
 
   const go = el("button", { class: "g-btn primary", type: "button" }, v.social ? "Tạo lại" : "Tạo caption");
   const err = el("div", { class: "g-error", role: "alert" });
@@ -165,9 +201,12 @@ function socialCard(v) {
       el("label", { for: "f-platform" }, "Nền tảng", platform),
       el("label", { for: "f-language" }, "Ngôn ngữ", language),
       el("label", { class: "full", for: "f-notes" }, "Ghi chú", notes),
+      el("label", { class: "full g-check", for: "f-ai" }, aiMade, "Video do AI tạo (thêm dòng ghi chú “video AI” vào caption)"),
     ),
     el("div", { class: "g-actions" }, go,
-      el("span", { class: "g-cost" }, `Gọi ${options.model} qua PiAPI · khoảng $0.01 mỗi lần`)),
+      el("span", { class: "g-cost" }, v.prompt
+        ? `Gọi ${options.model} qua PiAPI · khoảng $0.01 mỗi lần`
+        : `Gọi ${options.model} qua PiAPI, kèm 4–10 khung hình · khoảng $0.05–0.10 mỗi lần · lần đầu chép lời mất thêm chút thời gian`)),
     err, out,
   );
 
@@ -177,20 +216,32 @@ function socialCard(v) {
     if (busy) return;
     busy = true;
     go.disabled = true;
-    go.textContent = "Đang viết…";
+    go.textContent = v.prompt ? "Đang viết…" : "Đang xem video và viết…";
     err.textContent = "";
     storageSet(FORM_KEY, JSON.stringify({ platform: platform.value, language: language.value, notes: notes.value }));
     try {
       const res = await fetch(`/api/social/${encodeURIComponent(v.project_id)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Backlot-Action": "social" },
-        body: JSON.stringify({ video: v.path, platform: platform.value, language: language.value, notes: notes.value }),
+        body: JSON.stringify({
+          video: v.path, platform: platform.value, language: language.value, notes: notes.value,
+          ai_generated: aiMade.checked,
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
       v.social = body;
       renderCopy(out, body);
       renderList();
+      if (!v.prompt) {
+        // Show the transcript cached by this run without restarting the player.
+        getJSON("/api/videos").then((list) => {
+          const fresh = list.find((x) => keyOf(x) === keyOf(v));
+          if (!fresh) return;
+          v.transcript = fresh.transcript;
+          document.getElementById("reading-card")?.replaceWith(readingCard(v));
+        }).catch(console.error);
+      }
     } catch (e) {
       err.textContent = `Không tạo được: ${e.message}`;
     } finally {
@@ -369,6 +420,68 @@ async function load({ keepDetail = false } = {}) {
   renderList();
   if (!keepDetail || !detailEl.querySelector("video")) renderDetail();
 }
+
+// ---------------------------------------------------------------- upload
+
+const dropEl = document.getElementById("drop");
+const uploadInput = document.getElementById("upload-input");
+const uploadStatus = document.getElementById("upload-status");
+const uploadProgress = document.getElementById("upload-progress");
+const UPLOAD_HINT = uploadStatus.textContent;
+const UPLOAD_EXT = /\.(mp4|mov|webm)$/i;
+let uploading = false;
+
+function setUploadStatus(text, isErr = false) {
+  uploadStatus.textContent = text;
+  uploadStatus.classList.toggle("err", isErr);
+}
+
+function uploadFile(file) {
+  if (uploading || !file) return;
+  if (!UPLOAD_EXT.test(file.name)) { setUploadStatus("Chỉ nhận file .mp4, .mov hoặc .webm", true); return; }
+  if (file.size > 1024 ** 3) { setUploadStatus("Video lớn hơn 1 GB", true); return; }
+  uploading = true;
+  uploadProgress.hidden = false;
+  const bar = uploadProgress.firstElementChild;
+  bar.style.width = "0";
+  setUploadStatus(`Đang tải ${file.name}…`);
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/social-upload");
+  xhr.setRequestHeader("X-Backlot-Action", "upload");
+  xhr.setRequestHeader("X-File-Name", encodeURIComponent(file.name));
+  xhr.setRequestHeader("Content-Type", "application/octet-stream");
+  xhr.upload.onprogress = (e) => {
+    if (!e.lengthComputable) return;
+    const pct = Math.round((e.loaded / e.total) * 100);
+    bar.style.width = `${pct}%`;
+    setUploadStatus(`Đang tải ${file.name}… ${pct}%`);
+  };
+  const done = () => { uploading = false; uploadProgress.hidden = true; uploadInput.value = ""; };
+  xhr.onerror = () => { done(); setUploadStatus("Mất kết nối khi tải lên", true); };
+  xhr.onload = async () => {
+    done();
+    let body = {};
+    try { body = JSON.parse(xhr.responseText); } catch { /* not JSON */ }
+    if (xhr.status >= 400) { setUploadStatus(`Không tải lên được: ${body.detail || `HTTP ${xhr.status}`}`, true); return; }
+    setUploadStatus(`Đã tải lên ${file.name}. Chọn nền tảng rồi bấm “Tạo caption”.`);
+    selectedKey = `${body.project_id}/${body.path}`;
+    storageSet(SEL_KEY, selectedKey);
+    searchEl.value = "";
+    await load().catch((e) => setUploadStatus(`Lỗi tải danh sách: ${e.message}`, true));
+    setTimeout(() => { if (!uploading) setUploadStatus(UPLOAD_HINT); }, 6000);
+  };
+  xhr.send(file);
+}
+
+uploadInput.addEventListener("change", () => uploadFile(uploadInput.files[0]));
+for (const ev of ["dragenter", "dragover"]) {
+  dropEl.addEventListener(ev, (e) => { e.preventDefault(); dropEl.classList.add("over"); });
+}
+for (const ev of ["dragleave", "drop"]) {
+  dropEl.addEventListener(ev, (e) => { e.preventDefault(); dropEl.classList.remove("over"); });
+}
+dropEl.addEventListener("drop", (e) => uploadFile(e.dataTransfer?.files?.[0]));
 
 searchEl.addEventListener("input", renderList);
 load().catch((e) => { detailEl.textContent = `Lỗi tải danh sách: ${e.message}`; });

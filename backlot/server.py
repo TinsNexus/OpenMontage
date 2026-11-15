@@ -349,11 +349,54 @@ def create_app() -> FastAPI:
                 platform=str(payload.get("platform") or "facebook_reels"),
                 language=str(payload.get("language") or "vi"),
                 notes=str(payload.get("notes") or "")[:1000],
+                ai_generated=bool(payload.get("ai_generated", True)),
             )
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
+
+    @app.post("/api/social-upload")
+    async def social_upload(request: Request) -> dict:
+        """Upload a video made outside OpenMontage (raw body, name in ``X-File-Name``)."""
+        _require_action(request, "upload")
+        from urllib.parse import unquote
+
+        original = unquote(request.headers.get("x-file-name") or "")
+        try:
+            target, rel = await asyncio.to_thread(social.upload_target, PROJECTS_DIR, original)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        declared = int(request.headers.get("content-length") or 0)
+        if declared > social.UPLOAD_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="video larger than 1 GB")
+        part = target.with_name(target.name + ".part")
+        written = 0
+        try:
+            with part.open("wb") as fh:
+                async for chunk in request.stream():
+                    written += len(chunk)
+                    if written > social.UPLOAD_MAX_BYTES:
+                        raise HTTPException(status_code=413, detail="video larger than 1 GB")
+                    fh.write(chunk)
+            if not written:
+                raise HTTPException(status_code=422, detail="empty upload")
+            part.replace(target)
+        finally:
+            part.unlink(missing_ok=True)
+        await asyncio.to_thread(social.finish_upload, target, original)
+        return {"project_id": social.UPLOAD_PROJECT, "path": rel, "size_bytes": written}
+
+    @app.post("/api/social-upload/delete")
+    async def social_upload_delete(request: Request, payload: dict = Body(...)) -> dict:
+        """Remove an uploaded video with its sidecar and saved copy (uploads only)."""
+        _require_action(request, "upload")
+        project_dir = _safe_project_dir(social.UPLOAD_PROJECT)
+        rel = _safe_video(project_dir, payload.get("video"))
+        video = project_dir / rel
+        for path in (video, social._sidecar(video), social.social_path(project_dir, rel)):
+            path.unlink(missing_ok=True)
+        return {"deleted": rel}
 
     # ---- Images (free-form generation) ---------------------------------
 

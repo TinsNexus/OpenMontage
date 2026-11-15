@@ -29,6 +29,12 @@
 
   <div class="g-layout">
     <section class="g-list" aria-label="Danh sách video">
+      <div class="g-upload" id="drop">
+        <label class="g-btn primary" for="upload-input">Tải video lên</label>
+        <input id="upload-input" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" hidden>
+        <span class="g-cost" id="upload-status">Video ngoài dự án · kéo thả vào đây · mp4, mov, webm, tối đa 1 GB</span>
+        <div class="g-progress" id="upload-progress" hidden><div></div></div>
+      </div>
       <div class="g-filter">
         <input id="search" type="search" placeholder="Lọc theo dự án hoặc tên file…" aria-label="Lọc video">
       </div>

@@ -232,3 +232,73 @@ def test_thumb_endpoints(client, projects_root, monkeypatch):
     assert missing.status_code == 404
     opts = client.get("/api/social/options").json()
     assert opts["thumb_model"] == thumbs.AI_MODEL and opts["thumb_cost_usd"] == 0.03
+
+
+def _tiny_video(path: Path) -> None:
+    import subprocess
+
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=160x90:rate=10",
+                    "-f", "lavfi", "-i", "sine=frequency=440", "-t", "6", "-pix_fmt", "yuv420p",
+                    "-shortest", str(path)], check=True, timeout=60)
+
+
+def test_upload_read_and_generate(client, projects_root, monkeypatch, tmp_path):
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg not installed")
+    src = tmp_path / "src.mp4"
+    _tiny_video(src)
+    monkeypatch.setenv("PIAPI_KEY", "k")
+    seen = {}
+
+    def fake_chat(messages, model, key):
+        seen["content"] = messages[1]["content"]
+        return '{"titles":["T"],"caption":"C","hashtags":["#x"]}', {}
+
+    monkeypatch.setattr(social, "_chat", fake_chat)
+    monkeypatch.setattr(social, "transcribe", lambda v: "xin chào")
+
+    hdr = {"X-Backlot-Action": "upload", "X-File-Name": "Clip%20ngo%C3%A0i.mp4"}
+    assert client.post("/api/social-upload", content=src.read_bytes()).status_code == 403
+    assert client.post("/api/social-upload", content=b"x",
+                       headers={**hdr, "X-File-Name": "a.txt"}).status_code == 422
+    up = client.post("/api/social-upload", content=src.read_bytes(), headers=hdr).json()
+    assert up["project_id"] == social.UPLOAD_PROJECT and up["path"].startswith("assets/video/Clip")
+    again = client.post("/api/social-upload", content=src.read_bytes(), headers=hdr).json()
+    assert again["path"] != up["path"]                                           # never overwrites
+
+    # uploads are hidden from the Library but listed in the Gallery
+    assert all(p["project_id"] != social.UPLOAD_PROJECT for p in client.get("/api/projects").json())
+    listed = {v["path"]: v for v in client.get("/api/videos").json()}
+    assert listed[up["path"]]["uploaded"] and listed[up["path"]]["original_name"] == "Clip ngoài.mp4"
+
+    r = client.post(f"/api/social/{social.UPLOAD_PROJECT}", headers={"X-Backlot-Action": "social"},
+                    json={"video": up["path"], "platform": "tiktok", "ai_generated": False})
+    assert r.status_code == 200, r.text
+    rec = r.json()
+    assert rec["caption"] == "C" and rec["ai_generated"] is False and "lời thoại" in rec["prompt_source"]
+    images = [c for c in seen["content"] if c["type"] == "image_url"]
+    text = seen["content"][0]["text"]
+    assert len(images) >= 1 and images[0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert "xin chào" in text and "Do not call the video AI-generated" in text
+    fresh = {v["path"]: v for v in client.get("/api/videos").json()}
+    assert fresh[up["path"]]["transcript"] == "xin chào"                      # cached in the sidecar
+
+    d = client.post("/api/social-upload/delete", headers={"X-Backlot-Action": "upload"}, json={"video": up["path"]})
+    assert d.status_code == 200
+    assert not (projects_root / social.UPLOAD_PROJECT / up["path"]).exists()
+    # delete only works inside the uploads folder
+    _project(projects_root)
+    assert client.post("/api/social-upload/delete", headers={"X-Backlot-Action": "upload"},
+                       json={"video": "../fight/project.json"}).status_code in (403, 404)
+
+
+def test_unreadable_upload_reports_error(client, projects_root, monkeypatch):
+    monkeypatch.setenv("PIAPI_KEY", "k")
+    monkeypatch.setattr(social, "_chat", lambda *a: ('{"titles":["T"],"caption":"C","hashtags":[]}', {}))
+    up = client.post("/api/social-upload", content=b"not a video",
+                     headers={"X-Backlot-Action": "upload", "X-File-Name": "bad.mp4"}).json()
+    r = client.post(f"/api/social/{social.UPLOAD_PROJECT}", headers={"X-Backlot-Action": "social"},
+                    json={"video": up["path"], "platform": "tiktok"})
+    assert r.status_code == 502 and "valid video" in r.json()["detail"]
