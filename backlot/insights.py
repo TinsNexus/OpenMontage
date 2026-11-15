@@ -302,6 +302,34 @@ def build_view(page_id: str, snap_id: str, root: Optional[Path] = None,
     return view
 
 
+def stats_by_project(root: Optional[Path] = None, projects_dir: Optional[Path] = None) -> dict[str, dict[str, Any]]:
+    """Reel stats per Backlot project from each Page's latest snapshot.
+
+    A project with several reels gets the one with the most plays. Used by the
+    series wiki to show how each episode performed.
+    """
+    root = root or INSIGHTS_DIR
+    out: dict[str, dict[str, Any]] = {}
+    pages = list_pages(root)
+    if not pages:
+        return out
+    captions = _project_captions(projects_dir or PROJECTS_DIR)
+    chars = _characters()
+    for page in pages:
+        snap = page["snapshots"][0]["id"]
+        data = _read_json(root / page["page_id"] / snap / "insights.json") or {}
+        for r in _reel_rows(data, captions, chars):
+            if not r["project"]:
+                continue
+            pid = r["project"]["project_id"]
+            if pid in out and (out[pid]["plays"] or 0) >= (r["plays"] or 0):
+                continue
+            out[pid] = {k: r[k] for k in ("plays", "retention", "avg_watch_s", "length_s", "follows",
+                                          "comments", "permalink_url", "created_time")}
+            out[pid].update({"page_id": page["page_id"], "page_name": page["name"], "snapshot_id": snap})
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Rule findings (deterministic)
 # ---------------------------------------------------------------------------

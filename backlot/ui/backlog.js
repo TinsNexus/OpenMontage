@@ -1,4 +1,5 @@
 import { el, fmtAgo, getJSON } from "/ui/lib.js";
+import { renderMarkdown } from "/ui/markdown.js";
 
 const THEME_KEY = "backlot.theme";
 const SEL_KEY = "backlot.backlog.selected";
@@ -250,75 +251,6 @@ function infoCard(it) {
     el("div", { class: "g-actions" }, save, el("span", { class: "spacer", style: "flex:1" }), del),
     err,
   );
-}
-
-// ---------------------------------------------------------------- markdown (safe: DOM nodes only)
-
-function inline(text) {
-  const out = [];
-  const re = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*)/g;
-  let last = 0;
-  for (const m of text.matchAll(re)) {
-    if (m.index > last) out.push(text.slice(last, m.index));
-    const tok = m[0];
-    if (tok.startsWith("**")) out.push(el("strong", {}, inline(tok.slice(2, -2))));
-    else if (tok.startsWith("`")) out.push(el("code", {}, tok.slice(1, -1)));
-    else out.push(el("em", {}, inline(tok.slice(1, -1))));
-    last = m.index + tok.length;
-  }
-  if (last < text.length) out.push(text.slice(last));
-  return out;
-}
-
-const cells = (row) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
-
-function renderMarkdown(src) {
-  const root = document.createDocumentFragment();
-  const lines = src.replace(/\r\n?/g, "\n").split("\n");
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim()) { i++; continue; }
-    const h = line.match(/^(#{1,6})\s+(.*)$/);
-    if (h) { root.append(el(`h${Math.min(h[1].length, 4)}`, {}, inline(h[2]))); i++; continue; }
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { root.append(el("hr")); i++; continue; }
-    if (/^\s*>/.test(line)) {
-      const quote = [];
-      while (i < lines.length && /^\s*>/.test(lines[i])) { quote.push(lines[i].replace(/^\s*>\s?/, "")); i++; }
-      const bq = el("blockquote");
-      bq.append(renderMarkdown(quote.join("\n")));
-      root.append(bq);
-      continue;
-    }
-    if (/^\s*\|/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
-      const head = cells(line);
-      i += 2;
-      const rows = [];
-      while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(cells(lines[i])); i++; }
-      root.append(el("div", { class: "bl-table-wrap" }, el("table", {},
-        el("thead", {}, el("tr", {}, head.map((c) => el("th", {}, inline(c))))),
-        el("tbody", {}, rows.map((r) => el("tr", {}, r.map((c) => el("td", {}, inline(c)))))),
-      )));
-      continue;
-    }
-    const listRe = /^\s*([-*]|\d+\.)\s+(.*)$/;
-    if (listRe.test(line)) {
-      const ordered = /^\s*\d+\./.test(line);
-      const list = el(ordered ? "ol" : "ul");
-      while (i < lines.length && listRe.test(lines[i])) { list.append(el("li", {}, inline(lines[i].match(listRe)[2]))); i++; }
-      root.append(list);
-      continue;
-    }
-    const para = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,6}\s|\s*>|\s*\||\s*([-*]|\d+\.)\s|\s*-{3,}\s*$)/.test(lines[i])) {
-      para.push(lines[i].trim()); i++;
-    }
-    if (!para.length) { para.push(line.trim()); i++; }
-    const p = el("p");
-    para.forEach((t, n) => { if (n) p.append(el("br")); p.append(...inline(t)); });
-    root.append(p);
-  }
-  return root;
 }
 
 // ---------------------------------------------------------------- boot

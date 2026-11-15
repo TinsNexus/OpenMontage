@@ -10,7 +10,8 @@ explicit exception: user-triggered ``POST /api/social/...`` and
 into ``projects/<id>/assets/images/`` (see ``backlot.images``). The
 ``/api/characters`` endpoints manage the shared character library outside
 ``projects/`` (see ``lib.characters``), ``/api/backlog`` edits the
-content backlog file (see ``lib.backlog``), and user-triggered
+content backlog file (see ``lib.backlog``), ``/api/series`` edits the
+series wiki under ``series/`` (see ``lib.series``), and user-triggered
 ``POST /api/insights/...`` pull Facebook Page snapshots and LLM advice into
 ``insights/facebook/`` (see ``backlot.insights``).
 """
@@ -29,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backlot import images as imagegen, insights as insightslib, social, thumbs
-from lib import backlog as backloglib, characters as charlib
+from lib import backlog as backloglib, characters as charlib, series as serieslib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -542,6 +543,89 @@ def create_app() -> FastAPI:
             notes=str(payload.get("notes") or "")[:1000],
         )
 
+    # ---- Series wiki ----------------------------------------------------
+
+    def _series_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e).strip("'\""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.get("/api/series")
+    async def series_list() -> dict:
+        def build() -> dict:
+            chars = [{"id": c["id"], "name": c["name"], "primary_image": c["primary_image"]}
+                     for c in charlib.list_characters()]
+            return {"series": _series_call(serieslib.list_series), "statuses": serieslib.statuses(),
+                    "characters": chars}
+        return await asyncio.to_thread(build)
+
+    @app.get("/api/series/{series_id}")
+    async def series_get(series_id: str) -> dict:
+        def build() -> dict:
+            data = _series_call(serieslib.get_series, series_id)
+            try:
+                stats = insightslib.stats_by_project()
+            except Exception:
+                stats = {}
+            for ep in data["episodes"]:
+                ep["stats"] = stats.get(ep.get("project_id") or "")
+            return data
+        return await asyncio.to_thread(build)
+
+    @app.get("/api/series/{series_id}/pages/{slug}")
+    async def series_page(series_id: str, slug: str) -> dict:
+        return await asyncio.to_thread(_series_call, serieslib.read_page, series_id, slug)
+
+    @app.post("/api/series")
+    async def series_create(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "series")
+        fields = {k: v for k, v in payload.items() if k != "title"}
+        return await asyncio.to_thread(_series_call, serieslib.create_series, str(payload.get("title") or ""), **fields)
+
+    @app.post("/api/series/{series_id}")
+    async def series_update(series_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "series")
+        return await asyncio.to_thread(_series_call, serieslib.update_series, series_id, **payload)
+
+    @app.post("/api/series/{series_id}/delete")
+    async def series_delete(series_id: str, request: Request) -> dict:
+        _require_action(request, "series")
+        moved = await asyncio.to_thread(_series_call, serieslib.delete_series, series_id)
+        return {"moved_to": moved}
+
+    @app.post("/api/series/{series_id}/pages")
+    async def series_page_save(series_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "series")
+        return await asyncio.to_thread(_series_call, serieslib.save_page, series_id,
+                                       str(payload.get("text") or ""), payload.get("slug") or None)
+
+    @app.post("/api/series/{series_id}/pages/{slug}/delete")
+    async def series_page_delete(series_id: str, slug: str, request: Request) -> dict:
+        _require_action(request, "series")
+        await asyncio.to_thread(_series_call, serieslib.delete_page, series_id, slug)
+        return {"ok": True}
+
+    @app.post("/api/series/{series_id}/episodes")
+    async def series_episode_add(series_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "series")
+        fields = {k: v for k, v in payload.items() if k != "title"}
+        return await asyncio.to_thread(_series_call, serieslib.add_episode, series_id,
+                                       str(payload.get("title") or ""), **fields)
+
+    @app.post("/api/series/{series_id}/episodes/{episode_id}")
+    async def series_episode_update(series_id: str, episode_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "series")
+        return await asyncio.to_thread(_series_call, serieslib.update_episode, series_id, episode_id, **payload)
+
+    @app.post("/api/series/{series_id}/episodes/{episode_id}/delete")
+    async def series_episode_delete(series_id: str, episode_id: str, request: Request) -> dict:
+        _require_action(request, "series")
+        await asyncio.to_thread(_series_call, serieslib.delete_episode, series_id, episode_id)
+        return {"ok": True}
+
     # ---- Backlog -------------------------------------------------------
 
     def _backlog_call(fn, *args, **kwargs):
@@ -816,6 +900,10 @@ def create_app() -> FastAPI:
     async def backlog_page() -> HTMLResponse:
         return _ui_html("backlog.html", ("board.css", "gallery.css", "backlog.css", "backlog.js"))
 
+    @app.get("/series")
+    async def series_page_ui() -> HTMLResponse:
+        return _ui_html("series.html", ("board.css", "gallery.css", "backlog.css", "series.css", "series.js"))
+
     @app.get("/insights")
     async def insights_page() -> HTMLResponse:
         return _ui_html("insights.html", ("board.css", "gallery.css", "insights.css", "insights.js"))
@@ -839,7 +927,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights", "/series") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 

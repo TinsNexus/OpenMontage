@@ -105,5 +105,8 @@ venv/
 # Content backlog (ideas + script pointers; personal, see lib/backlog.py)
 /backlog/
 
+# Series wiki (bibles, pages, episodes; personal, see lib/series.py)
+/series/
+
 # Facebook Page analytics snapshots (personal, see backlot/insights.py)
 /insights/

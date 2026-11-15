@@ -53,3 +53,15 @@ caption matches. "Nhận định" are fixed rules (`backlot/insights.py`, no
 network); "Phân tích bằng AI" is a paid PiAPI chat call (model from
 `BACKLOT_INSIGHTS_MODEL`, else `BACKLOT_COPY_MODEL`) saved as `advice.json`,
 and its video ideas can be added to the Backlog in one click.
+
+## Series wiki (`/series`)
+
+One folder per series under `series/<id>/` (gitignored; see `lib/series.py`):
+`series.json` holds the logline, status, cast (character library ids) and
+episodes; `pages/*.md` are wiki pages. A new series starts with four
+template pages (Tổng quan, Thế giới, Nhân vật, Bối cảnh). Pages link to each
+other with `[[Page]]` or `[[Page|label]]`; a link to a missing page is shown
+in red and creates it on click. Each episode can link a Backlog item (one
+click creates it) and a project; when the project's reel is in the latest
+Insights snapshot, the episode shows its plays, retention and new follows.
+Deleting a series or page moves it to `series/_trash/`.
