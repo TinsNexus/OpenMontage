@@ -40,3 +40,16 @@ python -m backlot open backlot-demo-run
 ```
 
 Design doc: `internal/design/LIVING_STORYBOARD.md`.
+
+## Insights (`/insights`)
+
+Facebook Page analytics, outside `projects/`. "Lấy số liệu mới" runs the
+`facebook_page_insights` tool (needs `FACEBOOK_PAGE_ACCESS_TOKEN`, plus
+`FACEBOOK_PAGE_ID` with a User token) and saves a snapshot to
+`insights/facebook/<page_id>/<YYYY-MM-DD_HHMMSS>/` (gitignored). The tab shows
+KPIs with deltas vs the previous snapshot, followers per day, reel length vs
+retention, plays per character, and reels linked to the project whose Gallery
+caption matches. "Nhận định" are fixed rules (`backlot/insights.py`, no
+network); "Phân tích bằng AI" is a paid PiAPI chat call (model from
+`BACKLOT_INSIGHTS_MODEL`, else `BACKLOT_COPY_MODEL`) saved as `advice.json`,
+and its video ideas can be added to the Backlog in one click.

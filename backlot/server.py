@@ -9,8 +9,10 @@ explicit exception: user-triggered ``POST /api/social/...`` and
 ``backlot.thumbs``), and ``POST /api/images/...`` saves generated images
 into ``projects/<id>/assets/images/`` (see ``backlot.images``). The
 ``/api/characters`` endpoints manage the shared character library outside
-``projects/`` (see ``lib.characters``), and ``/api/backlog`` edits the
-content backlog file (see ``lib.backlog``).
+``projects/`` (see ``lib.characters``), ``/api/backlog`` edits the
+content backlog file (see ``lib.backlog``), and user-triggered
+``POST /api/insights/...`` pull Facebook Page snapshots and LLM advice into
+``insights/facebook/`` (see ``backlot.insights``).
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backlot import images as imagegen, social, thumbs
+from backlot import images as imagegen, insights as insightslib, social, thumbs
 from lib import backlog as backloglib, characters as charlib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
@@ -445,6 +447,58 @@ def create_app() -> FastAPI:
             except RuntimeError as e:
                 raise HTTPException(status_code=502, detail=str(e))
 
+    # ---- Facebook Page insights ---------------------------------------
+
+    def _insights_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=404, detail=f"snapshot not found: {e}")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.get("/api/insights")
+    async def insights_list() -> dict:
+        import os
+
+        import tools.base_tool  # noqa: F401  (loads .env into os.environ)
+        from tools import piapi_client
+
+        pages = await asyncio.to_thread(insightslib.list_pages)
+        return {
+            "pages": pages,
+            "token_configured": bool(os.environ.get("FACEBOOK_PAGE_ACCESS_TOKEN")),
+            "page_id_env": os.environ.get("FACEBOOK_PAGE_ID") or None,
+            "llm_configured": bool(piapi_client.get_api_key()),
+            "model": os.environ.get("BACKLOT_INSIGHTS_MODEL") or os.environ.get("BACKLOT_COPY_MODEL")
+                     or insightslib.DEFAULT_MODEL,
+            "languages": [{"id": k, "label": v} for k, v in insightslib.LANGUAGES.items()],
+        }
+
+    @app.get("/api/insights/{page_id}/{snap_id}")
+    async def insights_view(page_id: str, snap_id: str) -> dict:
+        return await asyncio.to_thread(_insights_call, insightslib.build_view, page_id, snap_id)
+
+    @app.post("/api/insights/refresh")
+    async def insights_refresh(request: Request, payload: dict = Body(default={})) -> dict:
+        _require_action(request, "insights")
+        try:
+            days = int(payload.get("days") or 90)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="days must be a number")
+        return await asyncio.to_thread(_insights_call, insightslib.refresh, days)
+
+    @app.post("/api/insights/{page_id}/{snap_id}/advice")
+    async def insights_advice(page_id: str, snap_id: str, request: Request, payload: dict = Body(default={})) -> dict:
+        _require_action(request, "insights")
+        return await asyncio.to_thread(
+            _insights_call, insightslib.generate_advice, page_id, snap_id,
+            language=str(payload.get("language") or "vi"),
+            notes=str(payload.get("notes") or "")[:1000],
+        )
+
     # ---- Backlog -------------------------------------------------------
 
     def _backlog_call(fn, *args, **kwargs):
@@ -719,6 +773,10 @@ def create_app() -> FastAPI:
     async def backlog_page() -> HTMLResponse:
         return _ui_html("backlog.html", ("board.css", "gallery.css", "backlog.css", "backlog.js"))
 
+    @app.get("/insights")
+    async def insights_page() -> HTMLResponse:
+        return _ui_html("insights.html", ("board.css", "gallery.css", "insights.css", "insights.js"))
+
     @app.get("/gallery")
     async def gallery_page() -> HTMLResponse:
         return _ui_html("gallery.html", ("board.css", "gallery.css", "gallery.js"))
@@ -738,7 +796,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery", "/images", "/characters", "/backlog") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
