@@ -43,6 +43,29 @@ _IGNORE_PARTS = {"node_modules", ".git", "__pycache__", ".cache"}
 SSE_HEARTBEAT_SECONDS = 15
 
 
+def code_fingerprint() -> str:
+    """Hash of the Python files that define Backlot's routes and data layer.
+
+    Compared against the value taken at import to tell whether this server
+    process is running older code than what is on disk (it then 404s on new
+    pages). UI assets are served fresh on every load, so they are not included.
+    """
+    import hashlib
+
+    h = hashlib.sha1()
+    for folder in (Path(__file__).resolve().parent, REPO_ROOT / "lib"):
+        for path in sorted(folder.glob("*.py")):
+            try:
+                st = path.stat()
+            except OSError:
+                continue
+            h.update(f"{path.name}:{st.st_mtime_ns}:{st.st_size};".encode())
+    return h.hexdigest()
+
+
+_STARTED_FINGERPRINT = code_fingerprint()
+
+
 def _ui_html(name: str, assets: tuple[str, ...]) -> HTMLResponse:
     html = (UI_DIR / name).read_text(encoding="utf-8")
     for asset in assets:
@@ -182,7 +205,10 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> dict:
-        return {"ok": True, "app": "backlot"}
+        import os
+
+        return {"ok": True, "app": "backlot", "pid": os.getpid(),
+                "stale": code_fingerprint() != _STARTED_FINGERPRINT}
 
     @app.get("/api/projects")
     async def projects() -> list:
@@ -414,8 +440,36 @@ def create_app() -> FastAPI:
                                 for p in sorted((d for d in PROJECTS_DIR.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)] if PROJECTS_DIR.is_dir() else []
             opts["characters"] = [{"id": c["id"], "name": c["name"], "primary_image": c["primary_image"]}
                                   for c in charlib.list_characters() if c["primary_image"]]
+            opts["caption_platforms"] = [{"id": k, "label": v["label"]} for k, v in social.IMAGE_PLATFORMS.items()]
+            opts["caption_languages"] = [{"id": k, "label": v} for k, v in social.LANGUAGES.items()]
+            opts["caption_model"] = __import__("os").environ.get("BACKLOT_COPY_MODEL") or social.DEFAULT_MODEL
             return opts
         return await asyncio.to_thread(build)
+
+    @app.post("/api/images/caption")
+    async def images_caption(request: Request, payload: dict = Body(...)) -> dict:
+        """Draft captions for one image (paid PiAPI chat call; looks at the image)."""
+        _require_action(request, "social")
+        project_dir = _safe_project_dir(str(payload.get("project_id") or ""))
+        target = (project_dir / str(payload.get("path") or "")).resolve()
+        try:
+            rel = target.relative_to(project_dir.resolve()).as_posix()
+        except ValueError:
+            raise HTTPException(status_code=403, detail="path escapes project")
+        try:
+            return await asyncio.to_thread(
+                social.generate_image_caption, project_dir, rel,
+                platform=str(payload.get("platform") or "facebook_post"),
+                language=str(payload.get("language") or "vi"),
+                notes=str(payload.get("notes") or "")[:1000],
+                ai_generated=None if payload.get("ai_generated") is None else bool(payload.get("ai_generated")),
+            )
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="image not found")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
 
     @app.post("/api/images/generate")
     async def images_generate(request: Request, payload: dict = Body(...)) -> dict:

@@ -101,3 +101,48 @@ export const STAGE_ICONS = {
   awaiting_human: "◈",
   failed: "✕",
 };
+
+// Copy text to the clipboard; the button briefly reads "Đã copy".
+export async function copyText(text, btn) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = el("textarea", { style: "position:fixed;opacity:0" });
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+  }
+  if (btn) {
+    const old = btn.textContent;
+    btn.textContent = "Đã copy";
+    btn.classList.add("done");
+    setTimeout(() => { btn.textContent = old; btn.classList.remove("done"); }, 1400);
+  }
+}
+
+export function copyBtn(getText, label = "Copy") {
+  const b = el("button", { class: "g-btn", type: "button" }, label);
+  b.addEventListener("click", () => copyText(getText(), b));
+  return b;
+}
+
+// Warn when the server process runs older Python code than what is on disk
+// (new pages then 404 until it restarts). Runs once per page load.
+(async function staleServerBanner() {
+  try {
+    const res = await fetch("/api/health", { cache: "no-store" });
+    const info = await res.json();
+    if (!info || !info.stale || document.getElementById("stale-banner")) return;
+    const bar = el("div", {
+      id: "stale-banner", role: "status",
+      style: "position:sticky;top:0;z-index:100;background:var(--amber-dim);color:var(--text);"
+        + "border-bottom:1px solid var(--amber);padding:8px 16px;font-size:13px;line-height:1.5",
+    },
+      "Backlot đang chạy code cũ nên trang mới có thể chưa mở được. Khởi động lại bằng: ",
+      el("code", { style: "font-family:var(--mono)" }, "python -m backlot restart"),
+      " rồi tải lại trang.");
+    document.body.prepend(bar);
+  } catch { /* health check is best-effort */ }
+})();

@@ -9,7 +9,13 @@ derived from what the pipeline already writes to `projects/<id>/`.
 python -m backlot open <project-id>   # start server if needed + open browser
 python -m backlot open                # library view (all projects)
 python -m backlot serve --port 4750   # run the server in the foreground
+python -m backlot restart             # restart the background server after updating Backlot
 ```
+
+The server does not reload code on its own. `/api/health` reports
+`"stale": true` once Backlot's Python files on disk differ from what the
+process loaded; every page then shows a banner, and `backlot open` restarts
+the server by itself.
 
 ## How it stays live
 
@@ -65,3 +71,13 @@ in red and creates it on click. Each episode can link a Backlog item (one
 click creates it) and a project; when the project's reel is in the latest
 Insights snapshot, the episode shows its plays, retention and new follows.
 Deleting a series or page moves it to `series/_trash/`.
+
+## Image captions (`/images`)
+
+Each image has a "Viết caption" button. The dialog sends a downscaled copy of
+the image (plus its generation prompt, when there is one) to the PiAPI chat
+model and returns three caption options, hashtags and alt text for Facebook,
+Instagram, TikTok or Threads. If the gateway refuses image input it falls back
+to the prompt and notes. Results are saved to
+`projects/<id>/artifacts/social/<path>.json` with the previous versions kept
+as history.
