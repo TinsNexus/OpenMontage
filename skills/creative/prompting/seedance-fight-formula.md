@@ -4,6 +4,9 @@ Reusable prompt recipe for short photoreal martial-arts videos: a library charac
 protects a noncombatant partner from a gang, nonstop combinations, two micro slow-mos,
 gentle reunion. Proven on `projects/mia-arcade-fight` (Mia × Kenta, retro arcade, 20s).
 
+For a solo hero vs a gang with no partner, no dialogue and one 10 s clip, use
+`solo-street-fight-formula.md` instead.
+
 Read `seedance-prompting.md` and `.agents/skills/seedance-2-0/SKILL.md` first; this file
 only adds the fight-specific formula and what we learned running it on PiAPI.
 
