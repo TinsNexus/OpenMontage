@@ -218,9 +218,9 @@
     "pitch": "Reel hài không thoại: nhân vật thú 3D tặng hết lòng rồi bị đá, khóc phóng đại cùng đám bạn nhậu, rồi lật kèo khi gặp đối tượng mới. Không có rào cản ngôn ngữ nên dễ viral ra nhiều nước (bản tham chiếu đạt 9,2 triệu view).",
     "specs": [
       "60–75 s · 25–30 shot · 2–3 s/shot",
-      "Kling i2v 720p, 3D cartoon",
-      "Không thoại: nhạc buồn + SFX",
-      "6 vai: HERO, CRUSH, RIVAL, 2 BUDDY, NEW"
+      "16:9 (FB) hoặc 9:16 (TikTok/Shorts), chọn trước khi tạo ảnh",
+      "Ảnh khởi đầu mỗi shot → Kling i2v 720p, ~5–8 USD/tập",
+      "Không thoại, không bật audio Kling: nhạc + SFX ghép khi dựng"
     ],
     "timeline": [
       [
@@ -246,13 +246,17 @@
       [
         "TWIST",
         "65–74 s: gặp NEW, lập tức đi tán; bạn ôm nhau cạn lời"
+      ],
+      [
+        "HOOK",
+        "Tuỳ chọn: NEW/RIVAL liếc ống kính, gợi tập sau"
       ]
     ],
     "inputs": [
-      "Character sheet cho 6 vai (1 món đồ nhận diện cho HERO)",
-      "1 bối cảnh chính (bãi cỏ nắng) + 2–3 bối cảnh cho beat WOO",
-      "Nhạc buồn guitar + đoạn nhạc vui cho TWIST",
-      "SFX khóc, sặc, tim vỡ, ding"
+      "Character sheet + identity cho 6 vai (1 món đồ nhận diện cho HERO)",
+      "25–30 ảnh khởi đầu (mỗi shot 1 ảnh, tạo bằng characters)",
+      "1 bối cảnh chính + 2–3 bối cảnh cho beat WOO",
+      "Nhạc buồn guitar + nhạc vui cho TWIST, SFX khóc/sặc/tim vỡ/ding"
     ],
     "good_for": [
       "Reel viral toàn cầu, không cần lồng tiếng",
