@@ -110,3 +110,6 @@ venv/
 
 # Facebook Page analytics snapshots (personal, see backlot/insights.py)
 /insights/
+
+# Product library (affiliate links, product photos; personal, see lib/products.py)
+/products/

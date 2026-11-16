@@ -1,4 +1,4 @@
-import { el, fmtAgo, getJSON, mediaURL, subscribe, thumbURL } from "/ui/lib.js";
+import { cartView, el, fmtAgo, getJSON, mediaURL, productPicker, subscribe, thumbURL } from "/ui/lib.js";
 
 const THEME_KEY = "backlot.theme";
 const SEL_KEY = "backlot.gallery.selected";
@@ -191,6 +191,8 @@ function socialCard(v) {
   notes.value = v.social?.notes ?? saved.notes ?? "";
   const aiMade = el("input", { id: "f-ai", type: "checkbox" });
   aiMade.checked = v.social?.ai_generated ?? !v.uploaded;
+  const picker = productPicker(options.all_products || [],
+    v.social?.products ? v.social.products.map((p) => p.id) : (options.project_products || {})[v.project_id]);
 
   const go = el("button", { class: "g-btn primary", type: "button" }, v.social ? "Tạo lại" : "Tạo caption");
   const err = el("div", { class: "g-error", role: "alert" });
@@ -202,6 +204,8 @@ function socialCard(v) {
       el("label", { for: "f-language" }, "Ngôn ngữ", language),
       el("label", { class: "full", for: "f-notes" }, "Ghi chú", notes),
       el("label", { class: "full g-check", for: "f-ai" }, aiMade, "Video do AI tạo (thêm dòng ghi chú “video AI” vào caption)"),
+      el("div", { class: "full" }, el("div", { class: "g-cost", style: "margin-bottom:6px" },
+        "Sản phẩm gắn link giỏ hàng (link được thêm nguyên văn vào cuối caption)"), picker.node),
     ),
     el("div", { class: "g-actions" }, go,
       el("span", { class: "g-cost" }, v.prompt
@@ -225,7 +229,7 @@ function socialCard(v) {
         headers: { "Content-Type": "application/json", "X-Backlot-Action": "social" },
         body: JSON.stringify({
           video: v.path, platform: platform.value, language: language.value, notes: notes.value,
-          ai_generated: aiMade.checked,
+          ai_generated: aiMade.checked, products: picker.value(),
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -272,8 +276,10 @@ function renderCopy(out, s) {
       el("div", { class: "g-row" },
         el("div", { class: "g-tags" }, (s.hashtags || []).map((h) => el("span", { class: "chip" }, h))),
         copyBtn(() => tagsText))),
+    cartView(s),
     el("div", { class: "g-actions" },
-      copyBtn(() => `${caption.value}\n\n${tagsText}`, "Copy caption + hashtag")),
+      copyBtn(() => [caption.value, s.cart, tagsText].filter(Boolean).join("\n\n"),
+        s.cart ? "Copy caption + link + hashtag" : "Copy caption + hashtag")),
   );
 
   if (s.history?.length) {

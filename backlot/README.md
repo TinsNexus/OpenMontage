@@ -81,3 +81,23 @@ Instagram, TikTok or Threads. If the gateway refuses image input it falls back
 to the prompt and notes. Results are saved to
 `projects/<id>/artifacts/social/<path>.json` with the previous versions kept
 as history.
+
+## Products (`/products`)
+
+A library of products you promote, for example with Shopee affiliate links. Each product lives in
+`products/<id>/` (gitignored, set `OPENMONTAGE_PRODUCTS_DIR` to move it) with `product.json` (name, price,
+affiliate link, description, optional English "look" text for prompts) and its photos (`ref_01.jpg`, …,
+with roles: front, label/logo, back, packaging, …). See `lib/products.py`.
+
+- **AI images with the product.** The page (or the Images page "Sản phẩm" chips) calls `piapi_image` with
+  `products: ["<id>"]`. The product photos go in as reference images after any characters', and a
+  `[product_lock]` line tells the model to keep shape, colours, logo and label text unchanged. The image
+  sidecar records `products`, and the project it is saved in is attached to the product.
+- **Product in a video.** Kling image-to-video takes one first frame, so a product video is two steps:
+  generate a 9:16 scene image with the product ("Khung hình video" preset), then ask the agent for an
+  image-to-video clip from that file.
+- **Cart link in captions.** A project lists its products in `project.json["products"]` (attach on the
+  Products page). Gallery and Images caption forms preselect those products. The model is told what is
+  being sold but is never asked to write a URL; the server appends the link verbatim as `cart`
+  (`🛒 Mua <name> (<price>): <link>`). On Instagram and TikTok, where caption links are not clickable, it
+  says the link is in the bio / first comment instead.

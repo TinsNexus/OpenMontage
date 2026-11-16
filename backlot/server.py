@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backlot import images as imagegen, insights as insightslib, social, thumbs
-from lib import backlog as backloglib, characters as charlib, series as serieslib
+from lib import backlog as backloglib, characters as charlib, products as prodlib, series as serieslib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -329,6 +329,7 @@ def create_app() -> FastAPI:
             "thumb_aspects": [{"id": k, "label": v} for k, v in thumbs.ASPECTS.items()],
             "thumb_model": thumbs.AI_MODEL,
             "thumb_cost_usd": thumbs.estimate_ai_cost("1K"),
+            **await asyncio.to_thread(_product_options),
         }
 
     @app.post("/api/thumbs/{project_id}/frame")
@@ -377,6 +378,7 @@ def create_app() -> FastAPI:
                 language=str(payload.get("language") or "vi"),
                 notes=str(payload.get("notes") or "")[:1000],
                 ai_generated=bool(payload.get("ai_generated", True)),
+                products=_product_ids(payload),
             )
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
@@ -440,6 +442,10 @@ def create_app() -> FastAPI:
                                 for p in sorted((d for d in PROJECTS_DIR.iterdir() if d.is_dir()), key=lambda d: d.stat().st_mtime, reverse=True)] if PROJECTS_DIR.is_dir() else []
             opts["characters"] = [{"id": c["id"], "name": c["name"], "primary_image": c["primary_image"]}
                                   for c in charlib.list_characters() if c["primary_image"]]
+            opts["products"] = [{"id": x["id"], "name": x["name"], "primary_image": x["primary_image"],
+                                 "affiliate_url": x.get("affiliate_url") or ""}
+                                for x in prodlib.list_products() if x["primary_image"]]
+            opts.update(_product_options())
             opts["caption_platforms"] = [{"id": k, "label": v["label"]} for k, v in social.IMAGE_PLATFORMS.items()]
             opts["caption_languages"] = [{"id": k, "label": v} for k, v in social.LANGUAGES.items()]
             opts["caption_model"] = __import__("os").environ.get("BACKLOT_COPY_MODEL") or social.DEFAULT_MODEL
@@ -463,6 +469,7 @@ def create_app() -> FastAPI:
                 language=str(payload.get("language") or "vi"),
                 notes=str(payload.get("notes") or "")[:1000],
                 ai_generated=None if payload.get("ai_generated") is None else bool(payload.get("ai_generated")),
+                products=_product_ids(payload),
             )
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail="image not found")
@@ -505,6 +512,9 @@ def create_app() -> FastAPI:
             refs.append(str(src))
             labels.append(f"{ref_dir.name}/{ref.get('path')}")
 
+        products = [str(x) for x in (payload.get("products") or [])]
+        for prod_id in products:
+            _product_or_404(prod_id)
         characters = [str(c) for c in (payload.get("characters") or [])]
         for cid in characters:
             try:
@@ -539,6 +549,7 @@ def create_app() -> FastAPI:
                     character_refs=str(payload.get("character_refs") or "set"),
                     reference_paths=refs, reference_labels=labels,
                     name_hint=str(payload.get("name") or ""),
+                    products=products, product_refs=int(payload.get("product_refs") or 3),
                 )
             except ValueError as e:
                 raise HTTPException(status_code=422, detail=str(e))
@@ -932,6 +943,150 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="image not found")
         return FileResponse(path)
 
+    # ---- Product library -----------------------------------------------
+
+    def _product_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e).strip("'\""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    def _product_or_404(prod_id: str) -> dict:
+        try:
+            return prodlib.get(prod_id)
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=404, detail=f"unknown product: {prod_id}")
+
+    def _with_usage(prod: dict) -> dict:
+        return {**prod, "projects": prodlib.projects_using(PROJECTS_DIR, prod["id"])}
+
+    @app.get("/api/products")
+    async def products_list() -> list:
+        def run() -> list:
+            return [_with_usage(p) for p in prodlib.list_products()]
+        return await asyncio.to_thread(run)
+
+    @app.get("/api/products/roles")
+    async def product_roles() -> list:
+        return [{"id": k, "label": v} for k, v in prodlib.ROLES.items()]
+
+    @app.get("/api/products/{prod_id}")
+    async def product_get(prod_id: str) -> dict:
+        prod = _product_or_404(prod_id)
+
+        def run() -> dict:
+            # Images generated with a product attach it to their project, so only those projects need scanning.
+            full = _with_usage(prod)
+            images = [i for i in imagegen.list_images(PROJECTS_DIR, limit=2000, only=set(full["projects"]))
+                      if prod_id in (i.get("products") or [])]
+            return {**full, "generated": images[:60]}
+        return await asyncio.to_thread(run)
+
+    @app.post("/api/products")
+    async def product_create(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "product")
+        fields = {k: payload.get(k) for k in ("description", "affiliate_url", "price", "look", "tags", "cta")
+                  if payload.get(k) is not None}
+        return await asyncio.to_thread(_product_call, prodlib.create, str(payload.get("name") or ""), **fields)
+
+    @app.post("/api/products/{prod_id}")
+    async def product_update(prod_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+        fields = {k: payload.get(k) for k in ("name", "description", "affiliate_url", "price", "look", "tags", "cta")
+                  if k in payload}
+        return await asyncio.to_thread(_product_call, prodlib.update, prod_id, **fields)
+
+    @app.post("/api/products/{prod_id}/delete")
+    async def product_delete(prod_id: str, request: Request) -> dict:
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+        return {"moved_to": await asyncio.to_thread(_product_call, prodlib.delete, prod_id)}
+
+    @app.post("/api/products/{prod_id}/images")
+    async def product_add_image(prod_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Add a product photo from an upload (base64) or a project image."""
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+        role = str(payload.get("role") or "front")
+        primary = bool(payload.get("make_primary"))
+        if payload.get("project_id"):
+            project_dir = _safe_project_dir(str(payload["project_id"]))
+            src = (project_dir / str(payload.get("path") or "")).resolve()
+            try:
+                src.relative_to(project_dir.resolve())
+            except ValueError:
+                raise HTTPException(status_code=403, detail="path escapes project")
+            return await asyncio.to_thread(_product_call, prodlib.add_image, prod_id, src, role=role,
+                                           make_primary=primary,
+                                           source_label=f"{payload['project_id']}/{payload.get('path')}")
+        if not payload.get("data_base64"):
+            raise HTTPException(status_code=422, detail="give file_name + data_base64, or project_id + path")
+        import base64
+        import tempfile
+
+        name = Path(str(payload.get("file_name") or "upload.jpg")).name
+        if Path(name).suffix.lower() not in prodlib.IMAGE_EXT:
+            raise HTTPException(status_code=422, detail="upload must be png, jpg or webp")
+        try:
+            data = base64.b64decode(str(payload["data_base64"]).split(",", 1)[-1], validate=True)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="data_base64 is not valid base64")
+        if len(data) > 20 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="image larger than 20 MB")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / name
+            path.write_bytes(data)
+            return await asyncio.to_thread(_product_call, prodlib.add_image, prod_id, path, role=role,
+                                           make_primary=primary, source_label=f"upload:{name}")
+
+    @app.post("/api/products/{prod_id}/images/delete")
+    async def product_remove_image(prod_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+        return await asyncio.to_thread(_product_call, prodlib.remove_image, prod_id, str(payload.get("file") or ""))
+
+    @app.post("/api/products/{prod_id}/role")
+    async def product_role(prod_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+        return await asyncio.to_thread(_product_call, prodlib.set_role, prod_id, str(payload.get("file") or ""),
+                                       str(payload.get("role") or ""))
+
+    @app.post("/api/products/{prod_id}/primary")
+    async def product_primary(prod_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+        return await asyncio.to_thread(_product_call, prodlib.set_primary, prod_id, str(payload.get("file") or ""))
+
+    @app.post("/api/products/{prod_id}/projects")
+    async def product_projects(prod_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Attach this product to projects (``add``) or detach it (``remove``): captions there get its cart link."""
+        _require_action(request, "product")
+        _product_or_404(prod_id)
+
+        def run() -> dict:
+            for pid in payload.get("add") or []:
+                prodlib.link_project(_safe_project_dir(str(pid)), [prod_id])
+            for pid in payload.get("remove") or []:
+                d = _safe_project_dir(str(pid))
+                prodlib.set_project_products(d, [i for i in prodlib.project_product_ids(d) if i != prod_id])
+            return _with_usage(prodlib.get(prod_id))
+        try:
+            return await asyncio.to_thread(run)
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.get("/product-media/{prod_id}/{file}")
+    async def product_media(prod_id: str, file: str) -> FileResponse:
+        try:
+            path = await asyncio.to_thread(prodlib.image_path, prod_id, file)
+        except (KeyError, ValueError):
+            raise HTTPException(status_code=404, detail="image not found")
+        return FileResponse(path)
+
     # ---- UI ------------------------------------------------------------
 
     @app.get("/p/{project_id}")
@@ -962,6 +1117,10 @@ def create_app() -> FastAPI:
     async def insights_page() -> HTMLResponse:
         return _ui_html("insights.html", ("board.css", "gallery.css", "insights.css", "insights.js"))
 
+    @app.get("/products")
+    async def products_page() -> HTMLResponse:
+        return _ui_html("products.html", ("board.css", "gallery.css", "products.js"))
+
     @app.get("/gallery")
     async def gallery_page() -> HTMLResponse:
         return _ui_html("gallery.html", ("board.css", "gallery.css", "gallery.js"))
@@ -981,7 +1140,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights", "/series") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights", "/series", "/products") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
@@ -997,6 +1156,29 @@ def _safe_project_dir(project_id: str) -> Path:
     if not project_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"unknown project: {project_id}")
     return project_dir
+
+
+def _product_options() -> dict:
+    """Products with a link (for caption pickers) and which projects promote which products."""
+    products = [{"id": x["id"], "name": x["name"], "affiliate_url": x.get("affiliate_url") or "",
+                 "primary_image": x["primary_image"]} for x in prodlib.list_products()]
+    by_project = {}
+    if PROJECTS_DIR.is_dir():
+        for d in PROJECTS_DIR.iterdir():
+            ids = prodlib.project_product_ids(d) if d.is_dir() else []
+            if ids:
+                by_project[d.name] = ids
+    return {"all_products": products, "project_products": by_project}
+
+
+def _product_ids(payload: dict) -> Optional[list]:
+    """``products`` from a caption request: missing = automatic, a list = exactly these (``[]`` = none)."""
+    raw = payload.get("products")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=422, detail="products must be a list of product ids")
+    return [str(x) for x in raw]
 
 
 def _require_action(request: Request, action: str) -> None:

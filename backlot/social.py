@@ -35,6 +35,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from lib import products as prodlib
+
 VIDEO_EXT = {".mp4", ".webm", ".mov"}
 VIDEO_DIRS = ("assets/video", "renders")
 SOCIAL_DIR = "artifacts/social"
@@ -304,7 +306,7 @@ def read_video(video: Path) -> dict[str, Any]:
 def build_messages(
     *, platform: str, language: str, project_title: str, video_name: str,
     prompt: Optional[str], notes: str = "", reading: Optional[dict[str, Any]] = None,
-    ai_generated: bool = True,
+    ai_generated: bool = True, products_note: str = "",
 ) -> list[dict[str, Any]]:
     p = PLATFORMS[platform]
     lang = LANGUAGES[language]
@@ -346,6 +348,8 @@ Video file: {video_name}
 
 {('Creator notes: ' + notes.strip()) if notes.strip() else ''}
 
+{products_note}
+
 Requirements:
 {grounding}
 {disclosure}
@@ -381,6 +385,13 @@ def parse_copy(text: str) -> dict[str, Any]:
     return {"titles": titles[:5], "caption": caption, "hashtags": tags[:30]}
 
 
+def _promoted(project_dir: Path, explicit: Optional[list[str]], from_meta: Optional[list[str]]) -> list[dict[str, Any]]:
+    """Products a caption promotes: the caller's list if given (``[]`` = none), else the media's, else the project's."""
+    if explicit is not None:
+        return prodlib.resolve_for(project_dir, explicit) if explicit else []
+    return prodlib.resolve_for(project_dir, from_meta)
+
+
 def _chat(messages: list[dict[str, str]], model: str, api_key: str) -> tuple[str, dict]:
     import requests
 
@@ -408,6 +419,7 @@ def _chat(messages: list[dict[str, str]], model: str, api_key: str) -> tuple[str
 def generate_social(
     project_dir: Path, rel_video: str, *, platform: str, language: str = "vi",
     notes: str = "", model: Optional[str] = None, ai_generated: bool = True,
+    products: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     if platform not in PLATFORMS:
         raise ValueError(f"unknown platform {platform!r}; expected one of {sorted(PLATFORMS)}")
@@ -434,14 +446,16 @@ def generate_social(
                 raise RuntimeError("could not read the uploaded video (ffmpeg failed) — is the file a valid video?")
             # project clips keep the old behaviour: generic copy from title + file name
     original = (prov["meta"] or {}).get("original_name")
+    promoted = _promoted(project_dir, products, (prov["meta"] or {}).get("products"))
     messages = build_messages(
         platform=platform, language=language,
         project_title="(uploaded video)" if project_dir.name == UPLOAD_PROJECT else _project_title(project_dir),
         video_name=original or Path(rel_video).name, prompt=prov["prompt"], notes=notes,
-        reading=reading, ai_generated=ai_generated,
+        reading=reading, ai_generated=ai_generated, products_note=prodlib.prompt_context(promoted),
     )
     reply, usage = _chat(messages, model, api_key)
     copy = parse_copy(reply)
+    copy.update(products=prodlib.link_list(promoted), cart=prodlib.cart_block(promoted, platform, language))
 
     record = {
         **copy,
@@ -460,7 +474,8 @@ def generate_social(
     existing = _read_json(path) or {}
     history = (existing.get("history") or [])[-9:]
     if existing.get("caption"):
-        history.append({k: existing.get(k) for k in ("titles", "caption", "hashtags", "platform", "language", "created_at")})
+        history.append({k: existing.get(k) for k in ("titles", "caption", "hashtags", "cart", "platform", "language",
+                                                     "created_at")})
     record["history"] = history
     _write_json(path, record)
     return record
@@ -510,7 +525,7 @@ def _image_data_url(path: Path) -> str:
 
 def build_image_messages(
     *, platform: str, language: str, project_title: str, image_name: str, prompt: Optional[str],
-    ai_generated: bool, notes: str = "", image_url: Optional[str] = None,
+    ai_generated: bool, notes: str = "", image_url: Optional[str] = None, products_note: str = "",
 ) -> list[dict[str, Any]]:
     p = IMAGE_PLATFORMS[platform]
     lang = LANGUAGES[language]
@@ -536,6 +551,8 @@ Image file: {image_name}
 </image_prompt>
 
 {('Creator notes: ' + notes.strip()) if notes.strip() else ''}
+
+{products_note}
 
 Requirements:
 - Do not invent names, places or events that are not in the image, prompt or notes.
@@ -585,7 +602,7 @@ def parse_image_copy(text: str) -> dict[str, Any]:
 def generate_image_caption(
     project_dir: Path, rel_image: str, *, platform: str, language: str = "vi",
     notes: str = "", model: Optional[str] = None, use_vision: bool = True,
-    ai_generated: Optional[bool] = None,
+    ai_generated: Optional[bool] = None, products: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     """Draft captions for an image; looks at the image when the chat API accepts it.
 
@@ -611,9 +628,11 @@ def generate_image_caption(
     prompt = meta.get("prompt")
     if not prompt and not notes.strip() and not use_vision:
         raise ValueError("no prompt and no notes for this image — add notes describing it")
+    promoted = _promoted(project_dir, products, meta.get("products"))
     common = dict(platform=platform, language=language, project_title=_project_title(project_dir),
                   image_name=image.name, prompt=prompt,
-                  ai_generated=bool(meta) if ai_generated is None else bool(ai_generated), notes=notes)
+                  ai_generated=bool(meta) if ai_generated is None else bool(ai_generated), notes=notes,
+                  products_note=prodlib.prompt_context(promoted))
 
     vision_used = False
     vision_error = None
@@ -633,6 +652,7 @@ def generate_image_caption(
             )
         reply, usage = _chat(build_image_messages(**common), model, api_key)
     copy = parse_image_copy(reply)
+    copy.update(products=prodlib.link_list(promoted), cart=prodlib.cart_block(promoted, platform, language))
 
     record = {
         **copy,
@@ -652,8 +672,8 @@ def generate_image_caption(
     existing = _read_json(path) or {}
     history = (existing.get("history") or [])[-9:]
     if existing.get("caption"):
-        history.append({k: existing.get(k) for k in ("captions", "caption", "hashtags", "alt_text", "platform",
-                                                     "language", "created_at")})
+        history.append({k: existing.get(k) for k in ("captions", "caption", "hashtags", "alt_text", "cart",
+                                                     "platform", "language", "created_at")})
     record["history"] = history
     tmp = path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")

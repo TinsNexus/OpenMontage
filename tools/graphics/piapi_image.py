@@ -140,6 +140,13 @@ class PiAPIImage(BaseTool):
                                "images 1..N and the prompt is prefixed with who each one is.",
             },
             "character_refs": {"type": "string", "enum": ["set", "full", "primary"], "default": "set"},
+            "products": {
+                "type": "array", "items": {"type": "string"},
+                "description": "Product library ids (products/<id>). Their photos become reference images after "
+                               "the characters' and a [product_lock] line keeps shape, colours and label text.",
+            },
+            "product_refs": {"type": "integer", "minimum": 1, "maximum": 6, "default": 3,
+                             "description": "Photos sent per product (primary first)."},
             "poll_timeout_seconds": {"type": "integer", "default": 900},
             "output_path": {
                 "type": "string",
@@ -215,6 +222,24 @@ class PiAPIImage(BaseTool):
                 sentences.append(f"{label} {'is' if len(nums) == 1 else 'all show'} {c['name']}: {look}. "
                                  f"Keep {c['name']}'s face, hair and outfit exactly as in those references.")
             prompt = " ".join(sentences) + "\n\n" + prompt
+        else:
+            n = 1
+
+        if inputs.get("products"):
+            from lib import products as prodlib
+
+            try:
+                items = prodlib.references(list(inputs["products"]), int(inputs.get("product_refs") or 3))
+            except KeyError as e:
+                raise ValueError(str(e).strip("'\""))
+            locks = []
+            for item in items:
+                refs = item["refs"]
+                nums = list(range(n, n + len(refs)))
+                n += len(refs)
+                character_paths += [r["path"] for r in refs]
+                locks.append(prodlib.lock_sentence(item["product"], nums, refs))
+            prompt = "\n".join(locks) + "\n\n" + prompt
 
         data: dict[str, Any] = {"prompt": prompt}
 
@@ -248,7 +273,7 @@ class PiAPIImage(BaseTool):
         count = len(character_paths) + len(given) + len(local)
         if count > _MAX_INPUT_IMAGES:
             raise ValueError(f"At most {_MAX_INPUT_IMAGES} input images; got {count}")
-        # Library characters first: their position matches "Reference image N" in the prompt.
+        # Library characters, then products, first: their position matches "Reference image N" in the prompt.
         urls = [piapi_client.upload(p, api_key) for p in character_paths] + given
         for p in local:
             urls.append(piapi_client.upload(p, api_key))

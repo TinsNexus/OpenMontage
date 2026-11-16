@@ -1,4 +1,4 @@
-import { copyBtn, el, fmtAgo, getJSON, mediaURL, subscribe, thumbURL } from "/ui/lib.js";
+import { cartView, copyBtn, el, productPicker, fmtAgo, getJSON, mediaURL, subscribe, thumbURL } from "/ui/lib.js";
 
 const THEME_KEY = "backlot.theme";
 const FORM_KEY = "backlot.images.form";
@@ -19,9 +19,9 @@ document.documentElement.dataset.theme = storageGet(THEME_KEY) === "light" ? "li
 
 function loadState() {
   try { return { model: "nano-banana-2.1", aspect: "16:9", resolution: "1K", n: 1, project: "", characters: [],
-    character_refs: "set", prompt: "", ...JSON.parse(storageGet(FORM_KEY) || "{}") }; }
+    character_refs: "set", prompt: "", products: [], ...JSON.parse(storageGet(FORM_KEY) || "{}") }; }
   catch { return { model: "nano-banana-2.1", aspect: "16:9", resolution: "1K", n: 1, project: "", characters: [],
-    character_refs: "set", prompt: "" }; }
+    character_refs: "set", prompt: "", products: [] }; }
 }
 function saveState() { storageSet(FORM_KEY, JSON.stringify(state)); }
 
@@ -85,6 +85,17 @@ function renderForm() {
   const refsMode = sel("i-crefs", ["set", "full", "primary"], state.character_refs, (v) => { state.character_refs = v; },
     (v) => ({ set: "Bộ chuẩn (3 ảnh)", full: "Đầy đủ (tối đa 6)", primary: "Chỉ ảnh chính" })[v]);
 
+  // products
+  const prodBox = el("div", { class: "g-chips", style: "gap:8px" },
+    opts.products.length ? opts.products.map((x) => {
+      const on = state.products.includes(x.id);
+      return el("button", { type: "button", class: `g-btn${on ? " done" : ""}`, "aria-pressed": on ? "true" : "false",
+        onclick: () => {
+          state.products = on ? state.products.filter((y) => y !== x.id) : [...state.products, x.id];
+          saveState(); renderForm();
+        } }, on ? `✓ ${x.name}` : x.name);
+    }) : el("span", { class: "g-cost" }, "Chưa có sản phẩm. Thêm ở trang ", el("a", { href: "/products" }, "Products"), "."));
+
   // reference images
   const refList = el("div", { class: "g-chips", style: "gap:6px" },
     [...pending.refs.map((r, i) => el("span", { class: "chip" }, `${r.project_id}/${r.path.split("/").pop()} `,
@@ -116,7 +127,7 @@ function renderForm() {
     try {
       const body = {
         prompt: prompt.value, model: state.model, aspect: state.aspect, resolution: state.resolution, n: state.n,
-        characters: state.characters, character_refs: state.character_refs,
+        characters: state.characters, character_refs: state.character_refs, products: state.products,
         references: pending.refs, uploads: pending.uploads,
         ...(projSel.value === NEW ? { new_project: newName.value } : { project_id: projSel.value }),
       };
@@ -146,6 +157,8 @@ function renderForm() {
     charBox,
     state.characters.length ? el("div", { class: "g-form", style: "margin-top:8px" },
       el("label", { class: "full", for: "i-crefs" }, "Ảnh nhân vật gửi kèm", refsMode)) : null,
+    el("h4", { class: "g-cost", style: "margin:16px 0 6px" }, "Sản phẩm (giữ đúng hình dáng, logo, nhãn)"),
+    prodBox,
     el("h4", { class: "g-cost", style: "margin:16px 0 6px" }, "Ảnh tham chiếu khác"),
     refList,
     el("div", { class: "g-form", style: "margin-top:6px" },
@@ -203,13 +216,14 @@ function renderResults() {
           img.aspect_ratio ? el("span", { class: "chip" }, img.aspect_ratio) : null,
           img.cost_usd != null ? el("span", { class: "chip" }, `$${Number(img.cost_usd).toFixed(2)}`) : null,
           (img.characters || []).map((c) => el("span", { class: "chip ok" }, c)),
+          (img.products || []).map((x) => el("span", { class: "chip ok" }, `🛒 ${x}`)),
           el("span", { class: "chip" }, fmtAgo(img.modified))),
         img.prompt ? el("p", { class: "g-sub", style: "margin:6px 0;max-height:4.5em;overflow:hidden" }, img.prompt) : null,
         el("div", { class: "g-actions", style: "margin:4px 0 0;gap:6px" },
           img.prompt ? el("button", { class: "g-btn", type: "button", onclick: () => {
             Object.assign(state, { prompt: img.prompt, model: img.model || state.model,
               aspect: img.aspect_ratio || state.aspect, resolution: img.resolution || state.resolution,
-              characters: img.characters || [], project: img.project_id });
+              characters: img.characters || [], products: img.products || [], project: img.project_id });
             saveState(); renderForm(); window.scrollTo({ top: 0, behavior: "smooth" });
           } }, "Dùng lại prompt") : null,
           el("button", { class: "g-btn", type: "button", onclick: () => {
@@ -239,6 +253,7 @@ function capPrefs() {
 function captionOutput(s) {
   if (!s || !s.caption) return el("p", { class: "hint" }, "Chưa có caption cho ảnh này.");
   const tagsText = (s.hashtags || []).join(" ");
+  const cart = s.cart || "";
   const options = (s.captions && s.captions.length ? s.captions : [s.caption]);
   const platformLabel = (opts.caption_platforms.find((p) => p.id === s.platform) || {}).label || s.platform;
   return el("div", { class: "g-out" },
@@ -250,8 +265,9 @@ function captionOutput(s) {
         return el("div", { class: "g-row", style: "margin-bottom:8px" }, ta,
           el("div", { style: "display:flex;flex-direction:column;gap:6px" },
             copyBtn(() => ta.value),
-            copyBtn(() => `${ta.value}\n\n${tagsText}`, "Copy + hashtag")));
+            copyBtn(() => [ta.value, cart, tagsText].filter(Boolean).join("\n\n"), cart ? "Copy + link + hashtag" : "Copy + hashtag")));
       })),
+    cartView(s),
     tagsText ? el("div", {}, el("h4", {}, "Hashtag"),
       el("div", { class: "g-row" }, el("div", { class: "g-tags" }, s.hashtags.map((t) => el("span", { class: "chip" }, t))),
         copyBtn(() => tagsText))) : null,
@@ -281,6 +297,8 @@ function openCaption(img) {
   notes.value = (img.social && img.social.notes) || "";
   const aiBox = el("input", { type: "checkbox", id: "c-ai" });
   aiBox.checked = img.social && img.social.ai_generated != null ? img.social.ai_generated : true;
+  const picker = productPicker(opts.all_products || [], img.social?.products ? img.social.products.map((p) => p.id)
+    : (img.products?.length ? img.products : (opts.project_products || {})[img.project_id]));
   const out = el("div", {}, captionOutput(img.social));
   const err = el("div", { class: "g-error", role: "alert" });
   const go = el("button", { class: "g-btn primary", type: "button" }, img.social ? "Viết lại" : "Viết caption");
@@ -291,7 +309,7 @@ function openCaption(img) {
       const res = await fetch("/api/images/caption", {
         method: "POST", headers: { "Content-Type": "application/json", "X-Backlot-Action": "social" },
         body: JSON.stringify({ project_id: img.project_id, path: img.path, platform: platform.value,
-          language: language.value, notes: notes.value, ai_generated: aiBox.checked }),
+          language: language.value, notes: notes.value, ai_generated: aiBox.checked, products: picker.value() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
@@ -316,7 +334,9 @@ function openCaption(img) {
           el("label", { for: "c-lang" }, "Ngôn ngữ", language),
           el("label", { class: "full", for: "c-notes" }, "Ghi chú cho AI", notes),
           el("label", { class: "full", for: "c-ai", style: "flex-direction:row;align-items:center;gap:8px" },
-            aiBox, "Ảnh tạo bằng AI (thêm dòng ghi chú AI vào caption)")),
+            aiBox, "Ảnh tạo bằng AI (thêm dòng ghi chú AI vào caption)"),
+          el("div", { class: "full" }, el("div", { class: "g-cost", style: "margin-bottom:6px" },
+            "Sản phẩm gắn link giỏ hàng"), picker.node)),
         el("div", { class: "g-actions" }, go,
           el("span", { class: "g-cost" }, `${opts.caption_model} qua PiAPI · AI nhìn ảnh để viết`)),
         err)),
@@ -330,6 +350,7 @@ async function load() {
   [opts, images] = await Promise.all([getJSON("/api/images/options"), getJSON("/api/images")]);
   if (!opts.models.some((m) => m.id === state.model)) state.model = opts.default_model;
   state.characters = state.characters.filter((id) => opts.characters.some((c) => c.id === id));
+  state.products = (state.products || []).filter((id) => opts.products.some((x) => x.id === id));
   renderForm();
   renderFilter();
   renderResults();

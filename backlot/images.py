@@ -42,14 +42,14 @@ def options() -> dict[str, Any]:
     }
 
 
-def list_images(projects_dir: Path, limit: int = 400) -> list[dict[str, Any]]:
-    """Images in every project's assets/images, newest first, with their sidecar metadata."""
+def list_images(projects_dir: Path, limit: int = 400, only: Optional[set[str]] = None) -> list[dict[str, Any]]:
+    """Images in every project's assets/images (or just the ``only`` projects), newest first, with sidecars."""
     from backlot.social import social_path
 
     out: list[dict[str, Any]] = []
     if not projects_dir.is_dir():
         return out
-    for project in sorted(p for p in projects_dir.iterdir() if p.is_dir()):
+    for project in sorted(p for p in projects_dir.iterdir() if p.is_dir() and (only is None or p.name in only)):
         folder = project / IMAGES_SUBDIR
         if not folder.is_dir():
             continue
@@ -68,6 +68,7 @@ def list_images(projects_dir: Path, limit: int = 400) -> list[dict[str, Any]]:
                 "resolution": meta.get("resolution"),
                 "characters": meta.get("characters") or [],
                 "references": meta.get("references") or [],
+                "products": meta.get("products") or [],
                 "cost_usd": meta.get("cost_usd"),
                 "generated": bool(meta),
                 "social": _read_json(social_path(project, img.relative_to(project).as_posix())) or None,
@@ -85,7 +86,7 @@ def generate(
     project_dir: Path, *, prompt: str, model: str = "nano-banana-2.1", aspect: Optional[str] = None,
     resolution: str = "1K", n: int = 1, characters: Optional[list[str]] = None, character_refs: str = "set",
     reference_paths: Optional[list[str]] = None, reference_labels: Optional[list[str]] = None,
-    name_hint: str = "",
+    name_hint: str = "", products: Optional[list[str]] = None, product_refs: int = 3,
 ) -> dict[str, Any]:
     """Generate ``n`` images into ``project_dir/assets/images``; returns saved entries + cost."""
     from tools.graphics.piapi_image import PiAPIImage
@@ -111,6 +112,9 @@ def generate(
         inputs["character_refs"] = character_refs
     if reference_paths:
         inputs["image_paths"] = list(reference_paths)
+    if products:
+        inputs["products"] = list(products)
+        inputs["product_refs"] = int(product_refs)
 
     tool = PiAPIImage()
     result = tool.execute(inputs)
@@ -122,12 +126,19 @@ def generate(
         meta = {
             "prompt": prompt, "model": model, "aspect_ratio": aspect, "resolution": resolution,
             "characters": list(characters or []), "character_refs": character_refs if characters else None,
-            "references": list(reference_labels or []), "task_ids": (result.data or {}).get("task_ids"),
+            "references": list(reference_labels or []), "products": list(products or []), "task_ids": (result.data or {}).get("task_ids"),
             "cost_usd": per_image, "created_at": time.time(), "source": "backlot:images",
         }
         path.with_name(f"{path.stem}.meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2),
                                                            encoding="utf-8")
         saved.append(path.relative_to(project_dir).as_posix())
+    if products and saved:
+        from lib import products as prodlib
+
+        try:
+            prodlib.link_project(project_dir, products)
+        except (FileNotFoundError, KeyError, ValueError):
+            pass
     if not result.success:
         raise RuntimeError(result.error or "image generation failed"
                            + (f" ({len(saved)} of {n} images were saved)" if saved else ""))
