@@ -1,6 +1,7 @@
 /* Gallery page — reuses board.css tokens (--surface, --border, --amber, ...). */
 
-.g-nav { display: flex; gap: 4px; margin-left: 8px; }
+.g-nav { display: flex; flex-wrap: wrap; gap: 4px; margin-left: 8px; min-width: 0; }
+.slate:has(.g-nav) { flex-wrap: wrap; row-gap: 10px; }
 .g-nav a {
   font-family: var(--mono); font-size: calc(11px * var(--fs-scale)); letter-spacing: .08em;
   text-transform: uppercase; color: var(--text-2); text-decoration: none;
@@ -8,6 +9,25 @@
 }
 .g-nav a:hover { color: var(--text); border-color: var(--border); }
 .g-nav a[aria-current="page"] { color: var(--amber); border-color: rgba(240,168,60,.35); background: var(--amber-dim); }
+
+/* Wide screens: the nav becomes a fixed left sidebar. Narrow screens keep it in the header. */
+@media (min-width: 901px) {
+  body:has(.g-nav) { padding-left: 184px; }
+  /* a transformed ancestor would pin the fixed sidebar to the header while the entrance animation runs */
+  .slate:has(.g-nav) { animation: none; }
+  .g-nav {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: 184px;
+    flex-direction: column; flex-wrap: nowrap; gap: 2px; margin: 0;
+    padding: 22px 12px; overflow-y: auto;
+    background: var(--surface); border-right: 1px solid var(--border-soft);
+  }
+  .g-nav::before {
+    content: 'Backlot'; display: block; padding: 4px 10px 16px;
+    font-family: var(--mono); font-size: calc(11px * var(--fs-scale)); letter-spacing: .22em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .g-nav a { padding: 9px 10px; }
+}
 
 .g-layout {
   display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 22px;
