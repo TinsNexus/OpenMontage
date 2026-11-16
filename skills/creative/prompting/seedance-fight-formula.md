@@ -59,7 +59,8 @@ CONTINUATION: @image5 is the exact last frame of the previous shot. Continue dir
 3. **Exactly two slow-mos**, one per clip, written as `RAMPS TO SLOW MOTION` / `SNAPS BACK TO REAL TIME`.
 4. **Dialogue ≤ 6 words per line** and use the hero's real name in the lines (e.g. 「ミア、取れたよ！」).
 5. **One prop** (plush, phone, bouquet) that drops in clip 1 and is handed back in clip 2: it gives the ending its payoff.
-6. **Adults only** in identities ("22-year-old adult ..."), no blood, no gore.
+6. **`#N` labels can leak onto clothing.** In the Nova street-fight run, seedance-2-fast printed 2/3/4/6 on the thugs' backs. Add "no numbers or text on clothing" to the CAST line, or refer to enemies by look ("the bearded thug").
+7. **Adults only** in identities ("22-year-old adult ..."), no blood, no gore.
 
 ## Assembly
 
