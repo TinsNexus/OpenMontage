@@ -210,5 +210,54 @@
       "Đưa nhân vật series vào cảnh mới mà vẫn giữ chuyển động thật"
     ],
     "order": "Làm video motion transfer: lấy động tác từ <video>, nhân vật <tên>, bối cảnh <ảnh 1–3>"
+  },
+  {
+    "id": "wordless-heartbreak",
+    "file": "wordless-heartbreak-formula.md",
+    "name": "Thất tình không lời (hoạt hình 3D)",
+    "pitch": "Reel hài không thoại: nhân vật thú 3D tặng hết lòng rồi bị đá, khóc phóng đại cùng đám bạn nhậu, rồi lật kèo khi gặp đối tượng mới. Không có rào cản ngôn ngữ nên dễ viral ra nhiều nước (bản tham chiếu đạt 9,2 triệu view).",
+    "specs": [
+      "60–75 s · 25–30 shot · 2–3 s/shot",
+      "Kling i2v 720p, 3D cartoon",
+      "Không thoại: nhạc buồn + SFX",
+      "6 vai: HERO, CRUSH, RIVAL, 2 BUDDY, NEW"
+    ],
+    "timeline": [
+      [
+        "WOO",
+        "0–10 s: tán CRUSH bằng 3 kiểu (hoa, ô, quà), đổi bối cảnh/ánh sáng"
+      ],
+      [
+        "DUMP",
+        "10–18 s: CRUSH đi với RIVAL, HERO đứng hình mắt lồi"
+      ],
+      [
+        "DRINK",
+        "18–36 s: đám bạn kéo đi nhậu, tu bia, sặc, gào, lăn ra cỏ"
+      ],
+      [
+        "SONG",
+        "36–55 s: BARD đánh đàn buồn, nước mắt chảy thành rãnh, bạn khóc theo"
+      ],
+      [
+        "PEAK",
+        "55–65 s: ECU há mồm khóc thấy răng, bạn hoảng"
+      ],
+      [
+        "TWIST",
+        "65–74 s: gặp NEW, lập tức đi tán; bạn ôm nhau cạn lời"
+      ]
+    ],
+    "inputs": [
+      "Character sheet cho 6 vai (1 món đồ nhận diện cho HERO)",
+      "1 bối cảnh chính (bãi cỏ nắng) + 2–3 bối cảnh cho beat WOO",
+      "Nhạc buồn guitar + đoạn nhạc vui cho TWIST",
+      "SFX khóc, sặc, tim vỡ, ding"
+    ],
+    "good_for": [
+      "Reel viral toàn cầu, không cần lồng tiếng",
+      "Xây kênh linh vật nhiều tập theo lịch: ế Tết, ế Valentine, hết tiền cuối tháng, bị sếp mắng, bị cắm sừng, mùa thi, ăn kiêng"
+    ],
+    "order": "Làm reel <thất tình / ế Tết / ế Valentine / hết tiền / bị sếp mắng / cắm sừng / mùa thi / ăn kiêng> không lời: HERO <con vật + món đồ nhận diện>, bạn nhậu <2 con vật>"
   }
 ]
