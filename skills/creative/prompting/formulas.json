@@ -1,0 +1,214 @@
+[
+  {
+    "id": "solo-street-fight",
+    "file": "solo-street-fight-formula.md",
+    "name": "Solo Street Fight",
+    "pitch": "Một cô gái tay không hạ sáu gã to con trong hẻm bụi ban ngày. Đòn nào cũng làm vỡ một món đồ, kết bằng cận mặt lạnh lùng rồi cắt cụt. Thuần hành động, không thoại.",
+    "specs": [
+      "10 s · 1 clip",
+      "16:9 · 720p",
+      "Seedance 2 fast LR · $1.06",
+      "Standard LR · $2.20",
+      "Có âm thanh"
+    ],
+    "timeline": [
+      [
+        "0–2s",
+        "Bị vây, đấm thẳng, đối thủ văng vào khung sắt · slow-mo 0.2s"
+      ],
+      [
+        "2–4s",
+        "Gạt, chưởng, cùi chỏ, thùng gỗ nổ tung"
+      ],
+      [
+        "4–5.5s",
+        "Hai gã lao vào, đá vòng + đá xoay hậu, bàn gãy"
+      ],
+      [
+        "5.5–7.5s",
+        "Đá văng dao, quật ngã xuống nhựa đường · slow-mo 0.2s"
+      ],
+      [
+        "7.5–9s",
+        "Trượt người, kẹp chân vật ngã tên cầm đầu"
+      ],
+      [
+        "9–10s",
+        "Zoom cận mặt, thế thủ, cắt cụt"
+      ]
+    ],
+    "inputs": [
+      "1 nhân vật trong thư viện (ảnh toàn thân, mặt, lưng)",
+      "Một nét nhận diện: tóc dài sáng màu, áo khoác nổi…",
+      "Bối cảnh khô, nắng gắt: hẻm, bãi container, gara"
+    ],
+    "good_for": [
+      "Reel hành động ngắn, đăng nhanh",
+      "Thử nhân vật mới với giá rẻ"
+    ],
+    "order": "Làm video solo street fight cho <nhân vật> ở <bối cảnh>",
+    "example": {
+      "project": "nova-street-fight",
+      "video": "assets/video/clip1_fast.mp4",
+      "label": "NOVA"
+    }
+  },
+  {
+    "id": "protect-the-partner",
+    "file": "seedance-fight-formula.md",
+    "name": "Protect the Partner",
+    "pitch": "Bọn côn đồ giật đồ và xô ngã người yêu, nữ chính lao vào hạ cả năm tên rồi nhẹ nhàng trao lại món đồ. Có thoại ngắn, có cảm xúc, kết ấm áp.",
+    "specs": [
+      "20 s · 2 clip × 10 s",
+      "16:9 · 720p",
+      "Seedance 2 standard LR · ~$4.40",
+      "Thoại + phụ đề",
+      "Style: hypervelocity-combat"
+    ],
+    "timeline": [
+      [
+        "0–2s",
+        "Người yêu thắng prop, bị giật và xô ngã"
+      ],
+      [
+        "2–4s",
+        "Đỡ người yêu, đối đáp một câu, phản đòn đầu tiên"
+      ],
+      [
+        "4–10s",
+        "Hạ lần lượt từng tên, 1 slow-mo, giữ người yêu an toàn"
+      ],
+      [
+        "10–16s",
+        "Clip 2 nối từ khung cuối, hạ nốt những tên còn lại"
+      ],
+      [
+        "16–18s",
+        "Đòn kết lên tên cầm đầu · slow-mo 0.2s"
+      ],
+      [
+        "18–20s",
+        "Nhặt prop, trao lại, một câu dỗ dành, mỉm cười"
+      ]
+    ],
+    "inputs": [
+      "2 nhân vật: nữ chính + người yêu",
+      "Một prop: thú bông, hoa, điện thoại",
+      "Bối cảnh có đèn màu: arcade, quán bar, chợ đêm",
+      "Ngôn ngữ thoại (Nhật, Hàn…)"
+    ],
+    "good_for": [
+      "Video có cốt truyện, dễ chia sẻ",
+      "Series nhân vật có cặp đôi"
+    ],
+    "order": "Làm video protect the partner: <nữ chính> bảo vệ <người yêu> ở <bối cảnh>, prop <món đồ>",
+    "example": {
+      "project": "mia-arcade-fight",
+      "video": "renders/final.mp4",
+      "label": "Mia × Kenta"
+    }
+  },
+  {
+    "id": "beauty-power-reveal",
+    "file": "beauty-power-reveal-formula.md",
+    "name": "Beauty → Power Reveal",
+    "pitch": "Mở đầu là hỗn chiến tối, không thấy rõ mặt nữ chính. Rồi slow-mo khoe nhan sắc, kẻ địch khựng lại, và một đòn năng lượng quét sạch. Nhịp nhanh, chậm, rồi nổ, kèm hai dòng chữ cố định.",
+    "specs": [
+      "15–30 s · 3–6 shot",
+      "Game CG 3D",
+      "Reel 1080×1270 + dải chữ",
+      "Không thoại · nhạc có drop"
+    ],
+    "timeline": [
+      [
+        "S1",
+        "Hook + hỗn chiến, nữ chính chỉ là bóng mờ"
+      ],
+      [
+        "S2",
+        "Vũ khí địch bị đánh văng, rơi xuống sàn (góc thấp)"
+      ],
+      [
+        "S3",
+        "Slow-mo sau gáy, quay đầu, tông màu chuyển sang lạnh"
+      ],
+      [
+        "S4",
+        "Cận mặt, macro mắt, chớp mắt chậm"
+      ],
+      [
+        "S5",
+        "Địch quỳ, khựng lại; năng lượng tụ quanh tay"
+      ],
+      [
+        "S6",
+        "Chớp sáng đúng drop nhạc, tia năng lượng quét ngang"
+      ]
+    ],
+    "inputs": [
+      "Nữ chính: tóc, phụ kiện, màu mắt, trang phục",
+      "Loại sức mạnh: băng, sét, lửa…(quyết định màu cuối)",
+      "Đấu trường + vũ khí địch sẽ bị tước",
+      "Bài nhạc có khoảng lặng và drop"
+    ],
+    "good_for": [
+      "Reel kiểu game cinematic, fantasy",
+      "Nhân vật \"đẹp mà nguy hiểm\""
+    ],
+    "order": "Làm video beauty power reveal cho <nhân vật>, sức mạnh <băng/sét/lửa…>",
+    "example": {
+      "project": "beauty-power-reveal-sample",
+      "video": "assets/sample/sample_v1.mp4",
+      "label": "Mika (bản thử)"
+    }
+  },
+  {
+    "id": "motion-transfer",
+    "file": "motion-transfer-formula.md",
+    "name": "Motion Transfer (thay nhân vật + bối cảnh)",
+    "pitch": "Giữ nguyên động tác, nhịp, chuyển động máy và thứ tự cắt cảnh của một video có sẵn, nhưng thay người bằng nhân vật của mình và đặt vào bối cảnh của mình. Mỗi tư liệu giữ đúng một vai trò.",
+    "specs": [
+      "4–15 s · khớp video gốc",
+      "Seedance 2 omni_reference",
+      "1 video + 1 nhân vật + N bối cảnh",
+      "Âm thanh môi trường, nhạc ghép khi dựng"
+    ],
+    "timeline": [
+      [
+        "REF",
+        "Video động tác: cỡ cảnh, chuyển động máy, nhịp, thứ tự cắt"
+      ],
+      [
+        "CHAR",
+        "Ảnh nhân vật: mặt, dáng, trang phục (trước, nghiêng, sau)"
+      ],
+      [
+        "SCN",
+        "Ảnh bối cảnh N ↔ shot N: hướng máy, ánh sáng, chất liệu"
+      ],
+      [
+        "ACT",
+        "Tư thế đầu → động tác chính → thu thế; tay ôm đạo cụ, hiệu ứng ở điểm va chạm"
+      ],
+      [
+        "FIX",
+        "Bóng đổ, phản chiếu nền ướt, mưa/bụi đúng thứ tự trước sau"
+      ],
+      [
+        "END",
+        "Dừng ở tư thế cuối của video gốc; âm thanh khớp điểm tiếp xúc"
+      ]
+    ],
+    "inputs": [
+      "Video động tác 4–15 s (≤ 10 MB)",
+      "Ảnh nhân vật / character sheet",
+      "Ảnh bối cảnh cho từng shot của video gốc",
+      "Đạo cụ + hiệu ứng va chạm (nước bắn, bụi, tia lửa)"
+    ],
+    "good_for": [
+      "Remix trend nhảy, võ, động tác có sẵn",
+      "Đưa nhân vật series vào cảnh mới mà vẫn giữ chuyển động thật"
+    ],
+    "order": "Làm video motion transfer: lấy động tác từ <video>, nhân vật <tên>, bối cảnh <ảnh 1–3>"
+  }
+]

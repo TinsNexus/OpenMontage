@@ -137,6 +137,44 @@ def resolve_prompt(project_dir: Path, rel_video: str, _depth: int = 0) -> dict[s
     return {"prompt": None, "source": None, "meta": meta}
 
 
+CHANNELS_FILE = Path(__file__).resolve().parent / "channels.json"
+POSTED_FILE = "artifacts/posted.json"
+
+
+def list_channels() -> list[dict[str, Any]]:
+    """Accounts a video can be marked as posted to (backlot/channels.json)."""
+    data = _read_json_any(CHANNELS_FILE)
+    return data if isinstance(data, list) else []
+
+
+def _read_json_any(path: Path) -> Any:
+    text = _read_text(path)
+    if text is None:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+
+def read_posted(project_dir: Path) -> dict[str, list[str]]:
+    data = _read_json(project_dir / POSTED_FILE)
+    return data if isinstance(data, dict) else {}
+
+
+def set_posted(project_dir: Path, rel_video: str, channel_ids: list[str]) -> list[str]:
+    """Record which channels a video was posted to; unknown ids are dropped."""
+    known = {c["id"] for c in list_channels()}
+    chosen = [c for c in dict.fromkeys(channel_ids) if c in known]
+    posted = read_posted(project_dir)
+    if chosen:
+        posted[rel_video] = chosen
+    else:
+        posted.pop(rel_video, None)
+    _write_json(project_dir / POSTED_FILE, posted)
+    return chosen
+
+
 def _project_title(project_dir: Path) -> str:
     data = _read_json(project_dir / "project.json") or {}
     return data.get("title") or project_dir.name
@@ -149,6 +187,7 @@ def list_videos(projects_dir: Path) -> list[dict[str, Any]]:
         return out
     for project_dir in sorted(p for p in projects_dir.iterdir() if p.is_dir()):
         title = _project_title(project_dir)
+        posted = read_posted(project_dir)
         for sub in VIDEO_DIRS:
             folder = project_dir / sub
             if not folder.is_dir():
@@ -178,6 +217,7 @@ def list_videos(projects_dir: Path) -> list[dict[str, Any]]:
                     "original_name": meta.get("original_name"),
                     "transcript": meta.get("transcript"),
                     "social": _read_json(social_path(project_dir, rel)),
+                    "posted": posted.get(rel, []),
                     "thumbs": list_thumbs(project_dir, rel),
                 })
     out.sort(key=lambda v: v["modified"], reverse=True)

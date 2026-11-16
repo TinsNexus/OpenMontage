@@ -366,6 +366,21 @@ def create_app() -> FastAPI:
         except RuntimeError as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+    @app.get("/api/channels")
+    async def channels() -> list:
+        return social.list_channels()
+
+    @app.post("/api/posted/{project_id}")
+    async def posted_set(project_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "posted")
+        project_dir = _safe_project_dir(project_id)
+        rel = _safe_video(project_dir, payload.get("video"))
+        ids = payload.get("channels") or []
+        if not isinstance(ids, list):
+            raise HTTPException(status_code=422, detail="channels must be a list")
+        chosen = await asyncio.to_thread(social.set_posted, project_dir, rel, [str(i) for i in ids])
+        return {"video": rel, "posted": chosen}
+
     @app.post("/api/social/{project_id}")
     async def social_generate(project_id: str, request: Request, payload: dict = Body(...)) -> dict:
         _require_action(request, "social")
@@ -1120,6 +1135,29 @@ def create_app() -> FastAPI:
     @app.get("/products")
     async def products_page() -> HTMLResponse:
         return _ui_html("products.html", ("board.css", "gallery.css", "products.js"))
+
+    @app.get("/formulas")
+    async def formulas_page() -> HTMLResponse:
+        return _ui_html("formulas.html", ("board.css", "gallery.css", "formulas.js"))
+
+    @app.get("/api/formulas")
+    async def formulas_api() -> list:
+        def load() -> list:
+            base = REPO_ROOT / "skills" / "creative" / "prompting"
+            index = base / "formulas.json"
+            if not index.is_file():
+                return []
+            items = json.loads(index.read_text(encoding="utf-8"))
+            for item in items:
+                md = base / item.get("file", "")
+                item["markdown"] = md.read_text(encoding="utf-8") if md.is_file() else ""
+                ex = item.get("example") or {}
+                try:
+                    item["example_exists"] = bool(ex) and (_safe_project_dir(ex["project"]) / ex["video"]).is_file()
+                except HTTPException:
+                    item["example_exists"] = False
+            return items
+        return await asyncio.to_thread(load)
 
     @app.get("/gallery")
     async def gallery_page() -> HTMLResponse:

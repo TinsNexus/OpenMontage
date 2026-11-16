@@ -10,6 +10,44 @@ const searchEl = document.getElementById("search");
 
 let videos = [];
 let options = { platforms: [], languages: [], model: "" };
+let channels = [];   // /api/channels: accounts a video can be marked as posted to
+
+const channelLabel = (id) => {
+  const c = channels.find((x) => x.id === id);
+  return c ? `${c.account} · ${c.platform}` : id;
+};
+const postedChips = (v) => (v.posted || []).map((id) => el("span", { class: "chip ok" }, `✓ ${channelLabel(id)}`));
+
+function postedCard(v) {
+  const status = el("span", { class: "g-sub" });
+  const boxes = channels.map((c) => {
+    const id = `posted-${c.id}`;
+    const box = el("input", { type: "checkbox", id });
+    box.checked = (v.posted || []).includes(c.id);
+    box.addEventListener("change", async () => {
+      const chosen = channels.filter((x) => document.getElementById(`posted-${x.id}`)?.checked).map((x) => x.id);
+      for (const b of boxes) b.querySelector("input").disabled = true;
+      status.textContent = "Đang lưu…";
+      try {
+        const res = await postJSON(`/api/posted/${encodeURIComponent(v.project_id)}`, "posted", { video: v.path, channels: chosen });
+        v.posted = res.posted;
+        status.textContent = "Đã lưu";
+        renderList();
+      } catch (e) {
+        box.checked = !box.checked;
+        status.textContent = `Không lưu được: ${e.message}`;
+      } finally {
+        for (const b of boxes) b.querySelector("input").disabled = false;
+      }
+    });
+    return el("label", { for: id, style: "display:flex;align-items:center;gap:8px;cursor:pointer" },
+      box, el("span", {}, el("b", {}, c.account), ` · ${c.platform}`));
+  });
+  return el("div", { class: "g-card" },
+    el("div", { class: "g-card-h" }, el("h3", {}, "Đã đăng lên"), el("div", { class: "spacer" }), status),
+    channels.length ? el("div", { style: "display:flex;flex-wrap:wrap;gap:10px 22px" }, ...boxes)
+      : el("p", { class: "hint", style: "margin:0" }, "Chưa có kênh nào trong backlot/channels.json."));
+}
 let selectedKey = storageGet(SEL_KEY);
 let busy = false;
 
@@ -66,7 +104,8 @@ function renderList() {
         el("div", { class: "g-chips" },
           v.uploaded ? el("span", { class: "chip" }, "tải lên")
             : el("span", { class: "chip" }, v.kind === "render" ? "render" : "clip"),
-          v.social ? el("span", { class: "chip ok" }, "có caption") : null,
+          ...postedChips(v),
+          v.social ? el("span", { class: "chip" }, "có caption") : null,
           v.prompt || v.uploaded ? null : el("span", { class: "chip warn" }, "không có prompt"),
           el("span", { class: "chip" }, fmtAgo(v.modified)),
         ),
@@ -131,6 +170,7 @@ function renderDetail() {
       v.uploaded ? delBtn
         : el("a", { class: "chip", href: `/p/${encodeURIComponent(v.project_id)}`, style: "text-decoration:none" }, "Mở board ↗"),
     ),
+    postedCard(v),
     v.prompt ? promptCard(v) : readingCard(v),
     socialCard(v),
     thumbCard(v, video),
@@ -421,7 +461,8 @@ function thumbCard(v, video) {
 // ---------------------------------------------------------------- boot
 
 async function load({ keepDetail = false } = {}) {
-  [videos, options] = await Promise.all([getJSON("/api/videos"), getJSON("/api/social/options")]);
+  [videos, options, channels] = await Promise.all([
+    getJSON("/api/videos"), getJSON("/api/social/options"), getJSON("/api/channels").catch(() => [])]);
   if (!videos.some((v) => keyOf(v) === selectedKey)) selectedKey = videos[0] ? keyOf(videos[0]) : null;
   renderList();
   if (!keepDetail || !detailEl.querySelector("video")) renderDetail();
