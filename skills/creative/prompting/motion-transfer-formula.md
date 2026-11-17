@@ -1,5 +1,7 @@
 # Motion Transfer Formula (thay nhân vật + bối cảnh vào video động tác)
 
+> **Vẫn chạy qua pipeline.** Công thức này chỉ thay phần prompt. Vẫn phải `init_project` (có `pipeline_type`) rồi ghi checkpoint từng giai đoạn bằng `lib/checkpoint.py` (chạy bằng `.venv/bin/python`): `in_progress` → `awaiting_human` → `completed` kèm artifact chuẩn. Không viết `gen_clips.py` / `compose.sh` riêng. Thiếu checkpoint thì thanh giai đoạn trên Backlot luôn xám.
+
 Công thức "remix" một video có sẵn: giữ nguyên **động tác, nhịp, chuyển động máy và thứ tự cắt cảnh** của
 video tham chiếu, nhưng thay người bằng **nhân vật của mình** và đặt vào **bối cảnh của mình**.
 Nguồn: prompt của 0xMomo trên X (`x.com/0xmomonifty/status/2121960262177792437`), bản gốc tiếng Trung.
@@ -86,6 +88,10 @@ Ghi chú: Seedance giới hạn prompt 4000 ký tự. Template trên khoảng 20
 | Seedance 2 fast | 0.096 | ~$0.96 |
 
 ## 3. Lưu ý
+- **Chính sách Meta:** nếu video động tác là cảnh đánh nhau, thêm dòng `SAFETY:` trong
+  [meta-safety-rules.md](meta-safety-rules.md) vào cuối `[ENDING & SOUND]`. Nếu video gốc có cảnh đánh người đã ngã,
+  vũ khí chạm người hoặc máu, cắt bỏ đoạn đó **trước khi upload**, vì model sẽ chép đúng động tác.
+  Nhân vật mặc đồ kín đáo, và bật nhãn AI khi đăng bản photoreal.
 - **Bản quyền:** video động tác nên là clip bạn có quyền dùng, hoặc chỉ dùng để mượn chuyển động. Không đăng lại nhân vật hay cảnh quay gốc.
 - Video gốc cắt nhiều shot thì cần đủ ảnh bối cảnh tương ứng. Thiếu ảnh thì model sẽ tự đoán cảnh cho các shot còn lại.
 - Đừng dùng nhãn kiểu `#1`, `#2` để gọi người trong prompt, vì nhãn có thể bị in lên quần áo (xem `seedance-fight-formula.md`).

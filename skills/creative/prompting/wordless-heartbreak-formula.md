@@ -76,7 +76,9 @@ Nếu cần cả hai, ưu tiên làm 9:16 rồi làm bản 16:9 riêng, không c
 Hoạt hình động vật dễ bị xếp vào nhóm "dành cho trẻ em" (đặc biệt trên YouTube), nên cảnh rượu bia có thể bị hạn chế
 kiếm tiền hoặc giảm phân phối.
 - **Bản an toàn (khuyên dùng cho YouTube):** thay bia bằng trà sữa, nước ngọt hoặc lẩu. Gag sặc, phun và tu ừng ực vẫn giữ nguyên.
-- **Bản bia:** chỉ dùng cho FB, khi kênh đã nhắm khán giả người lớn.
+- **Bản bia:** chỉ dùng cho FB, khi kênh đã nhắm khán giả người lớn. Không cận nhãn hiệu bia, không cổ vũ uống nhiều.
+  Page đã bị Meta giới hạn "không đề xuất cho người dưới 18 tuổi" (như Tisorr) thì dùng bản an toàn.
+  Chi tiết: [meta-safety-rules.md](meta-safety-rules.md).
 - Tránh cảnh đánh đập hay doạ trẻ em. Dùng dép, chổi lông gà hoặc cái nhìn trừng mắt để gây hài.
 
 ## 6. Âm thanh

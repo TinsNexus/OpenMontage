@@ -1,5 +1,7 @@
 # Beauty → Power Reveal Formula ("Her beauty is the warning")
 
+> **Vẫn chạy qua pipeline.** Công thức này chỉ thay phần prompt. Vẫn phải `init_project` (có `pipeline_type`) rồi ghi checkpoint từng giai đoạn bằng `lib/checkpoint.py` (chạy bằng `.venv/bin/python`): `in_progress` → `awaiting_human` → `completed` kèm artifact chuẩn. Không viết `gen_clips.py` / `compose.sh` riêng. Thiếu checkpoint thì thanh giai đoạn trên Backlot luôn xám.
+
 Công thức cho reel 25–30 s kiểu game-cinematic: hỗn chiến tối → kẻ địch bị tước vũ khí →
 **slow-mo khoe nhan sắc** nữ chính → địch khựng lại → **bùng sức mạnh** kết thúc.
 Phân tích từ reel tham chiếu `facebook.com/reel/1607920723884191` (Secro, 29 s,
@@ -77,12 +79,18 @@ High-end 3D game cinematic, Unreal Engine 5 render quality, volumetric god rays 
 
 ```
 S1: Dark <ARENA>, shafts of light through the roof. An armored brute with a <WEAPON> charges toward camera; a blurred figure in white robes flips past in the foreground. Reactive handheld camera, whip-pan, heavy motion blur. The woman's face is never visible.
-S2: Low angle at floor level, boots and planks in foreground. A <WEAPON> spins through the air in slow arc and clatters onto the wooden floor beside a fallen enemy's hand. Dust kicks up. Camera locked low, slight push-in.
-S3: Slow motion. From behind: a woman with long straight <HAIR> and a gold hairpin stands still in a cold blue light beam. She slowly turns her head over her shoulder. Hair strands drift. Slow dolly-in. Colour shifts from warm amber to cold blue.
+S2: Low angle at floor level, boots and planks in foreground. A <WEAPON> spins through the air in slow arc and clatters onto the empty wooden floor. A disarmed enemy scrambles backward away from it. Dust kicks up. Camera locked low, slight push-in.
+S3: Slow motion. From behind: a woman with long straight <HAIR> and a gold hairpin, in modest high-collared robes, stands still in a cold blue light beam. She slowly turns her head over her shoulder. Hair strands drift. Slow dolly-in. Colour shifts from warm amber to cold blue.
 S4: Slow motion extreme close-up of her face, then racks focus to her <EYE COLOUR> eye. She blinks once, calm, unimpressed. Shallow depth of field, soft rim light, hair crossing frame.
 S5: Medium shot, two kneeling armored enemies freeze and look up in fear. Cut feel: then the woman stands centered and calm as <POWER COLOUR> energy gathers around her hand and robes ripple.
-S6: Blinding <POWER COLOUR> flash, then a beam of <POWER> energy sweeps horizontally across frame, wrapping an enemy's armored arm. The woman stands motionless in the center, eyes half-closed. Camera shake on impact, then settles.
+S6: Blinding <POWER COLOUR> flash, then a beam of <POWER> energy sweeps horizontally across frame, wrapping an enemy's armored arm and pushing him back. The woman stands motionless in the center, eyes half-closed. Camera shake on impact, then settles; the enemies stagger back, alive, shielding their eyes.
 ```
+Mọi shot có địch: thêm dòng `SAFETY:` trong [meta-safety-rules.md](meta-safety-rules.md) vào cuối prompt.
+Tia năng lượng chỉ đẩy lùi hoặc trói tay địch, không xuyên người, không đốt cháy người.
+
+**Nhan sắc chỉ ở mặt, tóc, ánh mắt.** S3–S4 quay sau gáy và cận mặt, không lia dọc cơ thể.
+Trang phục kín (cổ cao, tay dài). Không cổ khoét sâu, xẻ tà cao hoặc vải xuyên thấu, vì nội dung gợi cảm
+cũng khiến page bị giới hạn đề xuất cho người dưới 18 tuổi.
 Không có thoại, không cần audio từ model (`enable_audio: false`) — âm thanh làm ở bước dựng.
 
 ### Dựng (FFmpeg / Remotion)
@@ -107,6 +115,9 @@ Không có thoại, không cần audio từ model (`enable_audio: false`) — â
 Trước khi tạo, vẫn trình bày bảng so sánh model và chờ chọn.
 
 ## 3. Lưu ý
+- **Chính sách Meta:** làm theo [meta-safety-rules.md](meta-safety-rules.md). Kiểu CG game fantasy ít rủi ro hơn
+  photoreal, nhưng vẫn cần bật nhãn AI nếu chọn bản photoreal. Câu chữ trên video giữ giọng "cảnh báo / hậu quả",
+  không dùng chữ "kill", "die", "blood".
 - Video gốc là cảnh cắt từ CG game có bản quyền; **không tải lại / dùng lại cảnh gốc**.
   Công thức này chỉ giữ cấu trúc, nhịp và kiểu chữ — nhân vật, bối cảnh, năng lượng phải là của mình.
 - Kling i2v một shot/lần (multi_shots hay lỗi). Ảnh ref nén JPG ~1080 px.

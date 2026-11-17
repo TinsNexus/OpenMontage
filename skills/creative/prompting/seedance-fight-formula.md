@@ -1,5 +1,7 @@
 # Seedance Fight Formula — "Protect the Partner" Hypervelocity Combat
 
+> **Still runs through the pipeline.** This formula only replaces the prompts. Call `init_project` (with `pipeline_type`) and write a checkpoint per stage via `lib/checkpoint.py` (run with `.venv/bin/python`): `in_progress` → `awaiting_human` → `completed` with the canonical artifact. No ad-hoc `gen_clips.py` / `compose.sh`. Without checkpoints the Backlot stage rail stays grey.
+
 Reusable prompt recipe for short photoreal martial-arts videos: a library character
 protects a noncombatant partner from a gang, nonstop combinations, two micro slow-mos,
 gentle reunion. Proven on `projects/mia-arcade-fight` (Mia × Kenta, retro arcade, 20s).
@@ -9,6 +11,10 @@ For a solo hero vs a gang with no partner, no dialogue and one 10 s clip, use
 
 Read `seedance-prompting.md` and `.agents/skills/seedance-2-0/SKILL.md` first; this file
 only adds the fight-specific formula and what we learned running it on PiAPI.
+
+> **Meta policy safety:** read [meta-safety-rules.md](meta-safety-rules.md) before writing prompts and before posting.
+> Every clip ends with that file's `SAFETY:` line (already in the templates below). The insult line must not be a slur
+> or a threat to kill, and captions frame the hero as protecting the partner, never gloating.
 
 This recipe is packaged as the style playbook `styles/hypervelocity-combat.yaml` (offered
 by the `cinematic` pipeline). Select that playbook at proposal; it carries the look, motion,
@@ -43,7 +49,8 @@ CAST: ONE <Hero>, ONE <Partner> (noncombatant), FIVE adult male gangsters: #1 le
 8-10s: #5 rushes at <Partner>. <Hero> bursts across, <redirect>, <combo> → #5 down, <Partner> safe.
 PHYSICS: foot plant, compression, explosive push-off, real contact, recoil, replant. Superhuman speed, real weight. No teleporting, no floating, no afterimages.
 STATE: #2 down from 5s, #4 down from 8s, #5 down from 10s, they stay down. <Partner> stays LEFT. <PROP> stays on the floor.
-AUDIO: natural <language> dialogue, impacts, footsteps, <ambient>. No music. No blood, no gore.
+AUDIO: natural <language> dialogue, impacts, footsteps, <ambient>. No music.
+SAFETY: stylized action-film choreography. No blood, no wounds, no gore. Blades and weapons never touch skin; they miss, get blocked or knocked away. No strikes on anyone already down or held. No neck or throat attacks. Every defeated enemy is clearly alive and conscious: groaning, rolling, sitting up dazed or crawling away. All characters are adults.
 ```
 
 Clip 2 swaps the LOCATION/CAST lines for a CONTINUATION block, then finishes the fight:
@@ -51,8 +58,9 @@ Clip 2 swaps the LOCATION/CAST lines for a CONTINUATION block, then finishes the
 ```
 CONTINUATION: @image5 is the exact last frame of the previous shot. Continue directly from it: same <place>, same positions. <Describe who is STANDING and who is DOWN exactly as the frame shows.> <PROP> lies on the floor.
 ... remaining enemies, one beat each ...
-6-8s: <SIGNATURE MOVE 2, e.g. spinning hook kick> on #1's guarded head. RAMPS TO SLOW MOTION 0.2s, camera jolt, SNAPS BACK TO REAL TIME. #1 falls flat. All five defeated and stay down.
-8-10s (35mm medium close-up): <Hero> picks up the SAME <PROP> and gently hands it to <Partner>. <Hero> says softly: "<reassurance ≤4 words>" Gentle smile. Five gangsters stay down.
+6-8s: <SIGNATURE MOVE 2, e.g. spinning hook kick> into #1's raised forearm guard. RAMPS TO SLOW MOTION 0.2s, camera jolt, SNAPS BACK TO REAL TIME. #1 stumbles back and sits down hard, dazed. All five defeated, groaning on the floor.
+8-10s (35mm medium close-up): <Hero> picks up the SAME <PROP> and gently hands it to <Partner>. <Hero> says softly: "<reassurance ≤4 words>" Gentle smile. In the background the five gangsters crawl away.
+SAFETY: (same line as clip 1)
 ```
 
 ## Rules that made it work
@@ -63,7 +71,9 @@ CONTINUATION: @image5 is the exact last frame of the previous shot. Continue dir
 4. **Dialogue ≤ 6 words per line** and use the hero's real name in the lines (e.g. 「ミア、取れたよ！」).
 5. **One prop** (plush, phone, bouquet) that drops in clip 1 and is handed back in clip 2: it gives the ending its payoff.
 6. **`#N` labels can leak onto clothing.** In the Nova street-fight run, seedance-2-fast printed 2/3/4/6 on the thugs' backs. Add "no numbers or text on clothing" to the CAST line, or refer to enemies by look ("the bearded thug").
-7. **Adults only** in identities ("22-year-old adult ..."), no blood, no gore.
+7. **Adults only** in identities ("22-year-old adult ..."), no blood, no gore, and the `SAFETY:` line from
+   [meta-safety-rules.md](meta-safety-rules.md) on every clip. Aim finishing moves at the guard, chest or shoulder,
+   not the head or neck, and end on defeated enemies who are visibly moving.
 
 ## Assembly
 

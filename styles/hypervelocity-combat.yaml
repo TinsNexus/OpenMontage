@@ -83,6 +83,7 @@ quality_rules:
   - "Each 2s beat names lens, angle, attacker and a 3-6 strike combination; no neutral resets"
   - "Dialogue lines 6 words or fewer; hero's real name in the lines"
   - "No blood, no gore, no music; all characters adults"
+  - "Meta policy: end every clip prompt with the SAFETY line from skills/creative/prompting/meta-safety-rules.md (weapons never touch skin, no hits on downed/held people, defeated enemies visibly alive); turn on the AI label when posting"
   - "Burn English subtitles from whisper timings; keep an .srt next to the assets"
 
 taste_profile:

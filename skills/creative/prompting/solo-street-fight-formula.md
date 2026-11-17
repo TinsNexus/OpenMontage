@@ -1,5 +1,7 @@
 # Solo Street Fight Formula — "One vs Six, Daylight Alley"
 
+> **Vẫn chạy qua pipeline.** Công thức này chỉ thay phần prompt. Vẫn phải `init_project` (có `pipeline_type`) rồi ghi checkpoint từng giai đoạn bằng `lib/checkpoint.py` (chạy bằng `.venv/bin/python`): `in_progress` → `awaiting_human` → `completed` kèm artifact chuẩn. Không viết `gen_clips.py` / `compose.sh` riêng. Thiếu checkpoint thì thanh giai đoạn trên Backlot luôn xám.
+
 Công thức cho clip 10 s photoreal: một nữ chính tay không hạ 6 gã to con trong hẻm ban ngày,
 mỗi đòn làm vỡ một món đồ, kết bằng cận mặt thế thủ và cắt cụt. Khác
 [seedance-fight-formula.md](seedance-fight-formula.md) ở chỗ **không có người cần bảo vệ,
@@ -10,6 +12,10 @@ Phân tích từ reel FB "LISA: Brutal Street Fight" (Dola AI, Seedance 2.0, 10 
 `projects/nova-street-fight` (NOVA, $1.06).
 
 Đọc `seedance-prompting.md` trước; file này chỉ thêm công thức riêng.
+
+> **An toàn chính sách Meta:** đọc [meta-safety-rules.md](meta-safety-rules.md) trước khi viết prompt và trước khi đăng.
+> Template dưới đã theo các quy tắc đó: dao chỉ chém hụt rồi bị đá văng, không đánh người đã ngã, kẻ thua còn cử động.
+> Caption không dùng chữ "brutal" như tên reel tham chiếu.
 
 ## Vì sao kiểu video này ăn
 
@@ -48,13 +54,16 @@ CAST: ONE <Hero> (@image1 full body, @image2 face, @image3 back): <silhouette ho
 0-2s (12mm wide, circling): surrounded. Drop low, block, slip, <strike 1>. Thug flies into LEFT <set piece 1>, it topples. RAMPS TO SLOW MOTION 0.2s on impact, SNAPS BACK TO REAL TIME.
 2-4s (85mm close, tracking): <parry + 2-hit combo>. Thug crashes into RIGHT <set piece 2>, it bursts into splinters and dust.
 4-5.5s (12mm low angle): two charge from both sides. <kick 1> sends one into the table, table snaps. Keep rotating, <kick 2>, the other slides across gravel.
-5.5-7.5s (85mm, ground level): knife slash. Lean back, <acrobatic dodge>, kick the knife away. Land, <throw> onto asphalt. RAMPS TO SLOW MOTION 0.2s on landing, dust and gravel burst, SNAPS BACK TO REAL TIME.
+5.5-7.5s (85mm, ground level): knife slash misses by a wide margin. Lean back, <acrobatic dodge>, kick the knife out of his hand, it clatters away far off-screen. Land, <throw> onto asphalt. RAMPS TO SLOW MOTION 0.2s on landing, dust and gravel burst, SNAPS BACK TO REAL TIME.
 7.5-9s (12mm wide, whip-pan): leader rushes from behind. Slide under, jump, <leg-wrap takedown> into a dust cloud.
-9-10s (85mm, snap zoom to her face): rises into a low fighting stance, hair settling, cold stare. All six down among wreckage. Hard cut, no fade.
-PHYSICS: foot plant, explosive push-off, real contact, recoil, enemies fly about 3 m and stay down. Fast but heavy. No teleporting, no floating, no afterimages.
+9-10s (85mm, snap zoom to her face): rises into a low fighting stance, hair settling, cold stare. All six on the ground among wreckage, groaning, rolling and too dazed to get up. Hard cut, no fade.
+PHYSICS: foot plant, explosive push-off, real contact, recoil, enemies stumble or slide about 3 m and stay on the ground. Fast but heavy. No teleporting, no floating, no afterimages.
 STATE: <who is down from when>. <Hero>'s face, hair and outfit never change.
-AUDIO: tense low-frequency ambient drone, heavy synced impacts, metal clang, wood breaking, gravel scatter, deep bass hits. No dialogue, no text, no logos. No blood, no gore, no wet ground, no rain.
+AUDIO: tense low-frequency ambient drone, heavy synced impacts, metal clang, wood breaking, gravel scatter, deep bass hits. No dialogue, no text, no logos. No wet ground, no rain.
+SAFETY: stylized action-film choreography. No blood, no wounds, no gore. Blades and weapons never touch skin; they miss, get blocked or knocked away. No strikes on anyone already down or held. No neck or throat attacks. Every defeated enemy is clearly alive and conscious: groaning, rolling, sitting up dazed or crawling away. All characters are adults.
 ```
+
+Trang phục nữ chính: thêm `modest fitted combat outfit, fully covered torso` vào CAST. Không dùng áo khoét sâu hoặc crop top.
 
 ## Bài học từ lần chạy NOVA
 
