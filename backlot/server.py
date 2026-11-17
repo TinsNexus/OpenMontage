@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backlot import images as imagegen, insights as insightslib, social, thumbs
-from lib import backlog as backloglib, characters as charlib, products as prodlib, series as serieslib
+from lib import backlog as backloglib, characters as charlib, plans as planlib, products as prodlib, series as serieslib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -721,6 +721,24 @@ def create_app() -> FastAPI:
         items = await asyncio.to_thread(_backlog_call, backloglib.list_items)
         return {"items": items, "statuses": backloglib.statuses()}
 
+    @app.get("/api/plans")
+    async def plans_list() -> dict:
+        def load() -> list:
+            plans = planlib.list_plans()
+            summaries = {s["project_id"]: s for s in _cached_summaries()}
+            for plan in plans:
+                for ep in plan["episodes"]:
+                    s = summaries.get(ep.get("project") or "")
+                    ep["project_exists"] = s is not None
+                    if s:
+                        ep["active_stage"] = s.get("active_stage")
+                        ep["awaiting_human"] = s.get("awaiting_human")
+                        ep["completed_count"] = s.get("completed_count")
+                        ep["stage_total"] = len(s.get("stage_states") or [])
+                        ep["render_count"] = s.get("render_count")
+            return plans
+        return {"plans": await asyncio.to_thread(load)}
+
     @app.get("/api/backlog/{item_id}/script")
     async def backlog_script(item_id: str) -> dict:
         text = await asyncio.to_thread(_backlog_call, backloglib.read_script, item_id)
@@ -1122,7 +1140,7 @@ def create_app() -> FastAPI:
 
     @app.get("/backlog")
     async def backlog_page() -> HTMLResponse:
-        return _ui_html("backlog.html", ("board.css", "gallery.css", "backlog.css", "backlog.js"))
+        return _ui_html("backlog.html", ("board.css", "gallery.css", "backlog.css", "backlog.js", "plans.js"))
 
     @app.get("/series")
     async def series_page_ui() -> HTMLResponse:
