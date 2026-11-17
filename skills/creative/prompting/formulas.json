@@ -217,10 +217,10 @@
     "name": "Thất tình không lời (hoạt hình 3D)",
     "pitch": "Reel hài không thoại: nhân vật thú 3D tặng hết lòng rồi bị đá, khóc phóng đại cùng đám bạn nhậu, rồi lật kèo khi gặp đối tượng mới. Không có rào cản ngôn ngữ nên dễ viral ra nhiều nước (bản tham chiếu đạt 9,2 triệu view).",
     "specs": [
-      "60–75 s · 25–30 shot · 2–3 s/shot",
+      "70–85 s · 28–33 shot · 2–3 s/shot",
       "16:9 (FB) hoặc 9:16 (TikTok/Shorts), chọn trước khi tạo ảnh",
-      "Ảnh khởi đầu mỗi shot → Kling i2v 720p, ~5–8 USD/tập",
-      "Không thoại, không bật audio Kling: nhạc + SFX ghép khi dựng"
+      "Seedance 2 Pro multi-shot hoặc Kling i2v 720p, ~10–17 USD/tập",
+      "Không thoại; nhạc rót đúng điểm theo cue map, không phủ suốt"
     ],
     "timeline": [
       [
@@ -229,11 +229,15 @@
       ],
       [
         "DUMP",
-        "10–18 s: CRUSH đi với RIVAL, HERO đứng hình mắt lồi"
+        "CRUSH đi với RIVAL; HERO đứng hình trong im lặng, nhạc buồn vào đúng khung hình chi tiết nhỏ rơi xuống"
+      ],
+      [
+        "FLASH",
+        "10 s hồi tưởng màu nâu vàng: những khoảnh khắc ngọt ngào với CRUSH, chớp trắng quay về hiện thực"
       ],
       [
         "DRINK",
-        "18–36 s: đám bạn kéo đi nhậu, tu bia, sặc, gào, lăn ra cỏ"
+        "18–36 s: đám bạn kéo đi nhậu, tu bia, sặc, gào, lăn ra cỏ; cắt phụt nhạc đúng khung hình phun"
       ],
       [
         "SONG",
@@ -241,22 +245,24 @@
       ],
       [
         "PEAK",
-        "55–65 s: ECU há mồm khóc thấy răng, bạn hoảng"
+        "55–65 s: ECU há mồm khóc thấy răng, bạn hoảng; cắt nhạc khi hậu quả xảy ra"
       ],
       [
         "TWIST",
-        "65–74 s: gặp NEW, lập tức đi tán; bạn ôm nhau cạn lời"
+        "65–74 s: gặp NEW, lập tức đi tán; bạn ôm nhau cạn lời; nhạc vui nổ đúng lúc HERO hồi sinh"
       ],
       [
         "HOOK",
-        "Tuỳ chọn: NEW/RIVAL liếc ống kính, gợi tập sau"
+        "Tuỳ chọn: NEW/RIVAL liếc ống kính, cắt nhạc + một tiếng chuông"
       ]
     ],
     "inputs": [
       "Character sheet + identity cho 6 vai (1 món đồ nhận diện cho HERO)",
       "25–30 ảnh khởi đầu (mỗi shot 1 ảnh, tạo bằng characters)",
       "1 bối cảnh chính + 2–3 bối cảnh cho beat WOO",
-      "Nhạc buồn guitar + nhạc vui cho TWIST, SFX khóc/sặc/tim vỡ/ding"
+      "Nhạc buồn guitar + nhạc vui cho TWIST, SFX khóc/sặc/tim vỡ/ding",
+      "Clip hồi tưởng 10 s (HERO + CRUSH) + grade nâu vàng",
+      "2 phiên bản mỗi bản nhạc để chọn cú vào mạnh"
     ],
     "good_for": [
       "Reel viral toàn cầu, không cần lồng tiếng",

@@ -1,5 +1,7 @@
 # Wordless Heartbreak Formula (hoạt hình 3D thất tình, không lời)
 
+> **Vẫn chạy qua pipeline.** Công thức này chỉ thay phần prompt. Vẫn phải `init_project` (có `pipeline_type`) rồi ghi checkpoint từng giai đoạn bằng `lib/checkpoint.py` (chạy bằng `.venv/bin/python`): `in_progress` → `awaiting_human` → `completed` kèm artifact chuẩn. Không viết `gen_clips.py` / `compose.sh` riêng. Thiếu checkpoint thì thanh giai đoạn trên Backlot luôn xám.
+
 Công thức reel hài **không thoại**, kể chuyện "tặng hết lòng rồi bị đá" bằng biểu cảm phóng đại.
 Nguồn tham chiếu: reel của kênh 驢略略 trên Facebook (`facebook.com/watch/?v=2286612768853006`), đăng 14/11/2026,
 **9,2 triệu view, 279 nghìn reaction** sau khoảng 2 ngày. Caption: "问世间情为何物，直教本驴生死相许 #沙雕动画 #失恋 #搞笑动画".
@@ -35,7 +37,7 @@ Lưu nhóm này vào `characters/` để các tập giữ đúng tạo hình (xe
 Mỗi nhân vật cần một trường `identity`: đoạn mô tả ngoại hình bằng tiếng Anh (loài, màu lông, dáng, món đồ nhận diện).
 Đoạn này được dán vào prompt thay cho tên slot.
 
-## 3. Timeline 60–75 s (khoảng 25–30 shot, 2–3 s mỗi shot)
+## 3. Timeline 70–85 s (khoảng 28–33 shot, 2–3 s mỗi shot)
 
 **Quy tắc 1–2 giây đầu:** shot đầu tiên luôn là **cận mặt HERO đang cầm hoặc đội món đồ nhận diện**, mặt si tình hoặc
 háo hức. Không mở bằng toàn cảnh bối cảnh. Bản gốc mở bằng cận cảnh lừa ôm bó cúc. Dùng luôn khung hình này làm thumbnail.
@@ -43,11 +45,12 @@ háo hức. Không mở bằng toàn cảnh bối cảnh. Bản gốc mở bằn
 | Beat | Thời gian | Nội dung | Gợi ý shot |
 |---|---|---|---|
 | WOO | 0–10 s | HERO tán CRUSH bằng 3 kiểu (hoa, che ô dưới mưa, giỏ quà), mỗi kiểu ở một bối cảnh hoặc giờ khác nhau | MS hai nhân vật, cắt nhanh, đổi ánh sáng ngày/đêm/hoàng hôn |
-| DUMP | 10–18 s | CRUSH bỏ đi với RIVAL, có thể giẫm lên HERO | CU mặt HERO đứng hình, mắt lồi, hoa rơi |
-| DRINK | 18–36 s | BUDDY kéo HERO đi nhậu. HERO tu bia, sặc bọt, gào khóc, lăn ra cỏ | Ba nhân vật trong một khung, phun bia, low angle khi tu |
-| SONG | 36–55 s | BARD đánh đàn buồn. HERO úp mặt khóc, nước mắt chảy thành rãnh, BUDDY ôm nhau khóc theo | Xen kẽ BARD (CU đàn) với HERO (khóc to dần); có một gag "vật lý hoá" nước mắt |
-| PEAK | 55–65 s | Khóc đỉnh điểm: ECU miệng há thấy răng, rồi BUDDY phản ứng hoảng | ECU, có thể shake nhẹ |
-| TWIST | 65–74 s | NEW xuất hiện, HERO lập tức tỉnh và cầm hoa đi tán. BUDDY ôm nhau, mặt cạn lời | WS HERO chạy tới NEW, kết bằng CU BUDDY |
+| DUMP | 10–20 s | CRUSH bỏ đi với RIVAL, có thể giẫm lên món quà của HERO. Kết bằng CU HERO đứng hình, giữ 2–3 s trong im lặng | CU mặt HERO đứng hình, mắt lồi; một chi tiết nhỏ rơi xuống (bông tuyết, cánh hoa) làm điểm vào nhạc |
+| FLASH | 20–30 s | **Hồi tưởng** những khoảnh khắc ngọt ngào HERO tưởng là "có gì đó" với CRUSH (giữ cửa, đỡ khi ngã, chia đồ ăn, CRUSH vẫy tay cười). Kết bằng chớp trắng quay về hiện thực | 4 shot × 2,5 s, quay chậm, chỉnh màu nâu vàng như ảnh cũ. Đây là beat chạm cảm xúc, làm cú "thất tình" thấm hơn |
+| DRINK | 30–42 s | BUDDY kéo HERO đi nhậu. HERO tu bia, sặc bọt, gào khóc, lăn ra cỏ | Ba nhân vật trong một khung, phun bia, low angle khi tu |
+| SONG | 42–54 s | BARD đánh đàn buồn. HERO úp mặt khóc, nước mắt chảy thành rãnh, BUDDY ôm nhau khóc theo | Xen kẽ BARD (CU đàn) với HERO (khóc to dần); có một gag "vật lý hoá" nước mắt |
+| PEAK | 54–66 s | Khóc đỉnh điểm: ECU miệng há thấy răng, rồi một hậu quả vật lý (tuyết đổ, cây đổ, nước dâng) | ECU, có thể shake nhẹ, rồi WS cho hậu quả |
+| TWIST | 66–78 s | NEW xuất hiện, HERO lập tức tỉnh và cầm hoa đi tán. BUDDY ôm nhau, mặt cạn lời | WS HERO chạy tới NEW, kết bằng CU BUDDY |
 | HOOK (tuỳ chọn) | 1 shot cuối | NEW hoặc RIVAL liếc nhìn ống kính, hoặc CRUSH quay lại nhìn HERO, để gợi "còn tiếp" | CU, giữ 1–1,5 s rồi cắt đen |
 
 ## 4. Khung hình
@@ -78,13 +81,53 @@ kiếm tiền hoặc giảm phân phối.
 
 ## 6. Âm thanh
 
-- **Không thoại.** Nhạc buồn guitar acoustic chiếm phần lớn video. **Đổi sang nhạc vui đúng khung hình NEW xuất hiện**
-  (đầu beat TWIST), không đổi sớm hay muộn.
-- Trong beat SONG, cắt shot khớp nhịp đàn: mỗi cú cắt rơi vào một phách mạnh.
-- SFX: tim vỡ, sặc, gào khóc, nấc, nước phun, "ding" khi gặp NEW.
-- Nhạc royalty-free hoặc tự tạo bằng ACE-Step. Đừng dùng bài hát có bản quyền.
-- **Không bật `enable_audio` của Kling.** Âm thanh gốc có thể tự sinh tiếng nói, mỗi clip lại sinh một kiểu nên nhạc
-  bị đứt khi ghép, và giá tăng 1,5–3 lần. Toàn bộ nhạc và SFX ghép lúc dựng.
+### Nguyên tắc: nhạc "rót" đúng điểm, không phủ suốt
+
+**Nhạc chạy từ đầu đến cuối là lỗi.** Mọi beat bị san phẳng, người xem không còn bất ngờ. Bản v1 của "Ế Noel" bị người
+dùng chê đúng điểm này. Cảm xúc bùng nổ đến từ **tương phản giữa im lặng và nhạc**:
+- **Im lặng trước, nhạc vào đúng khung hình.** Để 1–3 s chỉ có tiếng động, rồi nhạc vào ở đúng khoảnh khắc (không fade in).
+- **Cắt phụt nhạc để gây cười.** Ngay khung hình của gag (phun nước, tuyết đổ, ngã), nhạc tắt dưới 0,05 s, chỉ còn tiếng động.
+  Khoảng lặng sau gag (1–3 s) chính là chỗ người xem bật cười.
+- **Nhạc vui phải "nổ", không được "mở dần".** Bản nhạc phải có cú đánh mạnh ngay phách đầu; cắt bỏ phần mở đầu cho tới đúng phách đó.
+- **Kết bằng cắt nhạc.** Đúng khung hình HOOK, nhạc cắt cụt, còn lại một tiếng động duy nhất (chuông, "ting").
+
+### Bản đồ nhạc (cue map) mẫu
+
+| Beat | Âm thanh | Điểm chính xác |
+|---|---|---|
+| WOO + DUMP | **Không nhạc.** Chỉ có tiếng động trong cảnh | — |
+| DUMP → FLASH | Im lặng 2–3 s khi HERO đứng hình | **Nhạc buồn vào** đúng khung hình chi tiết nhỏ rơi xuống (bông tuyết đậu lên mũi) |
+| FLASH | Guitar buồn, nhẹ | Chớp trắng khi quay về hiện thực |
+| DRINK | Nhạc buồn nhỏ | **Cắt phụt** đúng khung hình phun nước; lặng 2–3 s; nhạc quay lại khi HERO lăn ra khóc |
+| SONG | Nhạc buồn **dâng lên hết cỡ** (dàn dây), như chính tiếng đàn của BARD trong cảnh | Chọn bản nhạc có đoạn dâng rơi vào beat này |
+| PEAK | Nhạc + tiếng gào dâng lên | **Cắt nhạc** đúng lúc hậu quả xảy ra; cảnh hậu quả để im lặng |
+| TWIST | "Ting" khi NEW xuất hiện giữa im lặng | **Nhạc vui nổ** đúng khung hình HERO hồi sinh (không phải lúc NEW xuất hiện) |
+| HOOK | — | **Cắt nhạc** + một tiếng chuông |
+
+Ví dụ đã làm: `projects/noel-that-tinh` bản v2 (`artifacts/edit_decisions.json` → `metadata.audio_turns`).
+
+### Cách làm
+
+1. **Đo điểm theo khung hình**, không đoán. Dùng scene detect để có các mốc cắt trong mỗi clip, rồi xuất dải khung hình
+   (ffmpeg `fps=4,tile`) quanh từng gag để tìm đúng giây phun nước, tuyết đổ, hồi sinh.
+2. **Tạo 2 phiên bản cho mỗi bản nhạc** bằng ACE-Step (rất rẻ, khoảng 0,03 USD/bản), rồi đo độ to theo từng 0,5 s để chọn bản:
+   - Bản buồn: vào ngay phách đầu, đoạn đầu nhẹ, có đoạn dâng rơi đúng vào beat SONG.
+   - Bản vui: có cú đánh mạnh ở phách đầu. Đo theo từng 50 ms để tìm đúng thời điểm đánh rồi cắt bỏ phần trước đó.
+3. **Trộn sẵn một track duy nhất** bằng `audio_mixer` (`operation: "mix"`, mỗi đoạn nhạc có `start_seconds` riêng), vì
+   `hyperframes_compose` chỉ nhận một track nhạc. Đoạn nhạc buồn bị cắt rồi quay lại thì tách thành 2 file liên tiếp (phần A, phần B),
+   để nhạc tiếp tục đúng chỗ đang dở.
+4. **Kiểm tra bằng số đo.** Đo độ to từng giây của track đã trộn: các khoảng lặng phải xuống dưới -35 dB, điểm vào nhạc phải tăng vọt.
+
+### Tiếng động và nguồn âm thanh
+
+- **Không thoại.**
+- **Seedance 2:** âm thanh gốc dùng được làm lớp tiếng động, với điều kiện prompt ghi "foley only, no speech, no music"
+  và đã kiểm tra bằng whisper là không có lời. Tăng khoảng 10–12 dB rồi đặt dưới nhạc.
+- **Kling: không bật `enable_audio`.** Âm thanh gốc có thể tự sinh tiếng nói, mỗi clip lại sinh một kiểu nên nhạc bị đứt
+  khi ghép, và giá tăng 1,5–3 lần.
+- Chưa có tool tạo SFX. Tiếng "ting" và tiếng chuông có thể tự tạo bằng ffmpeg `aevalsrc` (sóng sine tắt dần).
+- Nhạc royalty-free hoặc tự tạo bằng ACE-Step. Giai điệu public domain như "Jingle Bells" được dùng nếu tự thu mới.
+  Đừng dùng bài hát có bản quyền.
 
 ## 7. Sản xuất
 
@@ -111,8 +154,23 @@ Mặc định `kling_piapi`, 720p, mode std. So sánh giá và model với ngư�
 Cộng thêm 30–50% cho các shot phải tạo lại. Giá lấy từ bảng giá trong `tools/video/kling_piapi.py`; kiểm tra lại
 bằng `estimate_cost` trước khi chạy.
 
+### Bước 3b: Đoạn hồi tưởng (FLASH)
+- Một clip riêng dài 10 s, chỉ có HERO và CRUSH, gồm 4 shot kỷ niệm (Seedance 2 Pro khoảng 2,0 USD). Prompt thêm dòng
+  "Dreamy memory montage: warm golden glow, soft hazy light, gentle slow motion".
+- Chỉnh màu bằng `color_grade` `custom_vf` cho ra tông nâu vàng như ảnh cũ, có glow, viền tối và chớp trắng ở đầu và cuối:
+  ```
+  hue=s=0.35,colorbalance=rs=0.18:gs=0.08:bs=-0.15:rm=0.12:gm=0.05:bm=-0.12:rh=0.08:bh=-0.08,eq=brightness=0.03,
+  split[a][b];[b]gblur=sigma=16[g];[a][g]blend=c0_mode=screen:c0_opacity=0.3:c1_mode=normal:c1_opacity=0:c2_mode=normal:c2_opacity=0,
+  vignette=PI/4.5,fade=t=in:st=0:d=0.35:color=white,fade=t=out:st=9.6:d=0.45:color=white
+  ```
+  **Chỉ áp glow lên kênh sáng (`c0`).** Nếu blend cả ba kênh, hình sẽ ngả tím hồng.
+- Không cần tạo lại clip cũ: có thể chen thêm 1–2 shot từ beat WOO (đan khăn, tập trước gương) đã chỉnh màu như trên.
+
 ### Bước 4: Dựng
-Ghép các clip, đặt cú cắt theo nhạc, thêm SFX và logo. Kiểm tra lại toàn bộ video ở chế độ tắt tiếng: tắt tiếng mà vẫn hiểu chuyện thì đạt.
+- `hyperframes_compose` phát mỗi clip từ giây 0 của file nguồn. Vì vậy muốn dùng một đoạn giữa clip thì phải cắt sẵn bằng
+  `video_trimmer` (`operation: "cut"`, `codec: "libx264"` để cắt đúng khung hình), mỗi đoạn một file.
+- Đặt các đoạn nối tiếp trên timeline, gắn track nhạc đã trộn sẵn theo bản đồ nhạc ở mục 6, thêm logo.
+- Kiểm tra lại toàn bộ video ở chế độ tắt tiếng: tắt tiếng mà vẫn hiểu chuyện thì đạt. Sau đó nghe lại từng điểm vào và cắt nhạc.
 
 ### Prompt mẫu (i2v)
 
@@ -141,10 +199,13 @@ fluffs his hair and dashes toward <NEW identity>, holding out a fresh bouquet wi
 Camera tracks sideways with him, bright cheerful light. No text, no speech.
 ```
 
-## 8. Biến thể chủ đề (giữ khung WOO → DUMP → DRINK → SONG → PEAK → TWIST)
+## 8. Biến thể chủ đề (giữ khung WOO → DUMP → FLASH → DRINK → SONG → PEAK → TWIST)
 
 Nguyên tắc chung khi đổi chủ đề:
-- **DRINK → SONG → PEAK gần như giữ nguyên.** Thứ thay đổi là WOO (HERO hy vọng điều gì), DUMP (nỗi đau là gì) và TWIST (cái gì làm HERO hồi sinh ngay lập tức).
+- **DRINK → SONG → PEAK gần như giữ nguyên.** Thứ thay đổi là WOO (HERO hy vọng điều gì), DUMP (nỗi đau là gì), FLASH (HERO nhớ lại điều gì) và TWIST (cái gì làm HERO hồi sinh ngay lập tức).
+- **FLASH luôn là những gì HERO đã mất hoặc tưởng là có:** Tết thì nhớ những cái Tết còn có người yêu; hết tiền thì nhớ đầu tháng tiêu như đại gia;
+  bị sếp mắng thì nhớ những đêm thức trắng làm báo cáo; ăn kiêng thì nhớ những món đã từ bỏ.
+- **Bản đồ nhạc ở mục 6 dùng chung cho mọi biến thể.** Chỉ đổi gag nào là điểm cắt nhạc và khoảnh khắc nào là điểm nhạc vui nổ.
 - **Mọi câu thoại ngầm phải biến thành hình.** Ví dụ "bao giờ cưới?" thành họ hàng chỉ tay và giơ ảnh cưới. Nếu một gag cần lời mới hiểu thì bỏ gag đó.
 - **TWIST phải ngắn và vô liêm sỉ:** HERO hồi sinh trong 1–2 shot, còn BUDDY là người cạn lời.
 - Đổi bối cảnh, màu và nhạc theo chủ đề, nhưng giữ nguyên bộ nhân vật để các tập liền mạch như một series.
