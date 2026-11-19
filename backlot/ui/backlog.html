@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Backlog</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+<link rel="stylesheet" href="/ui/backlog.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Backlog</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/gallery">Gallery</a>
+      <a href="/">Library</a>
+      <a href="/backlog" aria-current="page">Backlog</a>
+      <a href="/series">Series</a>
+      <a href="/tutien">Tu Tiên</a>
+      <a href="/heartbreak">Heartbreak</a>
+      <a href="/insights">Insights</a>
+      <a href="/images">Images</a>
+      <a href="/characters">Characters</a>
+      <a href="/swap">Thay nhân vật</a>
+      <a href="/products">Products</a>
+      <a href="/formulas">Formulas</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <section id="plans" class="pl-wrap" aria-label="Kế hoạch đăng" hidden></section>
+
+  <div class="g-layout">
+    <section class="g-list" aria-label="Danh sách backlog">
+      <div class="g-actions" style="margin:0 0 12px">
+        <button class="g-btn primary" type="button" id="newBtn">+ Ý tưởng mới</button>
+      </div>
+      <div class="g-filter"><input id="q" type="search" placeholder="Tìm theo tên, tag, mô tả…" aria-label="Tìm trong backlog"></div>
+      <div class="bl-status-filter" id="statusFilter" role="group" aria-label="Lọc theo trạng thái"></div>
+      <div id="list"></div>
+      <p class="hint" id="empty" style="display:none">Backlog đang trống. Bấm “+ Ý tưởng mới” để thêm.</p>
+    </section>
+    <section class="g-detail" id="detail" aria-live="polite">
+      <p class="hint">Chọn một mục ở bên trái.</p>
+    </section>
+  </div>
+</div>
+<script type="module" src="/ui/backlog.js"></script>
+<script type="module" src="/ui/plans.js"></script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+[
+  {
+    "id": "solo-street-fight",
+    "file": "solo-street-fight-formula.md",
+    "name": "Solo Street Fight",
+    "pitch": "Một cô gái tay không hạ sáu gã to con trong hẻm bụi ban ngày. Đòn nào cũng làm vỡ một món đồ, kết bằng cận mặt lạnh lùng rồi cắt cụt. Thuần hành động, không thoại.",
+    "specs": [
+      "10 s · 1 clip",
+      "16:9 · 720p",
+      "Seedance 2 fast LR · $1.06",
+      "Standard LR · $2.20",
+      "Có âm thanh"
+    ],
+    "timeline": [
+      [
+        "0–2s",
+        "Bị vây, đấm thẳng, đối thủ văng vào khung sắt · slow-mo 0.2s"
+      ],
+      [
+        "2–4s",
+        "Gạt, chưởng, cùi chỏ, thùng gỗ nổ tung"
+      ],
+      [
+        "4–5.5s",
+        "Hai gã lao vào, đá vòng + đá xoay hậu, bàn gãy"
+      ],
+      [
+        "5.5–7.5s",
+        "Dao chém hụt, bị đá văng, quật ngã xuống nhựa đường · slow-mo 0.2s"
+      ],
+      [
+        "7.5–9s",
+        "Trượt người, kẹp chân vật ngã tên cầm đầu"
+      ],
+      [
+        "9–10s",
+        "Zoom cận mặt, thế thủ, địch nằm rên, cắt cụt"
+      ]
+    ],
+    "inputs": [
+      "1 nhân vật trong thư viện (ảnh toàn thân, mặt, lưng)",
+      "Một nét nhận diện: tóc dài sáng màu, áo khoác nổi…",
+      "Bối cảnh khô, nắng gắt: hẻm, bãi container, gara"
+    ],
+    "good_for": [
+      "Reel hành động ngắn, đăng nhanh",
+      "Thử nhân vật mới với giá rẻ"
+    ],
+    "order": "Làm video solo street fight cho <nhân vật> ở <bối cảnh>",
+    "example": {
+      "project": "nova-street-fight",
+      "video": "assets/video/clip1_fast.mp4",
+      "label": "NOVA"
+    }
+  },
+  {
+    "id": "protect-the-partner",
+    "file": "seedance-fight-formula.md",
+    "name": "Protect the Partner",
+    "pitch": "Bọn côn đồ giật đồ và xô ngã người yêu, nữ chính lao vào hạ cả năm tên rồi nhẹ nhàng trao lại món đồ. Có thoại ngắn, có cảm xúc, kết ấm áp.",
+    "specs": [
+      "20 s · 2 clip × 10 s",
+      "16:9 · 720p",
+      "Seedance 2 standard LR · ~$4.40",
+      "Thoại + phụ đề",
+      "Style: hypervelocity-combat"
+    ],
+    "timeline": [
+      [
+        "0–2s",
+        "Người yêu thắng prop, bị giật và xô ngã"
+      ],
+      [
+        "2–4s",
+        "Đỡ người yêu, đối đáp một câu, phản đòn đầu tiên"
+      ],
+      [
+        "4–10s",
+        "Hạ lần lượt từng tên, 1 slow-mo, giữ người yêu an toàn"
+      ],
+      [
+        "10–16s",
+        "Clip 2 nối từ khung cuối, hạ nốt những tên còn lại"
+      ],
+      [
+        "16–18s",
+        "Đòn kết vào thế đỡ của tên cầm đầu · slow-mo 0.2s"
+      ],
+      [
+        "18–20s",
+        "Nhặt prop, trao lại, một câu dỗ dành, mỉm cười"
+      ]
+    ],
+    "inputs": [
+      "2 nhân vật: nữ chính + người yêu",
+      "Một prop: thú bông, hoa, điện thoại",
+      "Bối cảnh có đèn màu: arcade, quán bar, chợ đêm",
+      "Ngôn ngữ thoại (Nhật, Hàn…)"
+    ],
+    "good_for": [
+      "Video có cốt truyện, dễ chia sẻ",
+      "Series nhân vật có cặp đôi"
+    ],
+    "order": "Làm video protect the partner: <nữ chính> bảo vệ <người yêu> ở <bối cảnh>, prop <món đồ>",
+    "example": {
+      "project": "mia-arcade-fight",
+      "video": "renders/final.mp4",
+      "label": "Mia × Kenta"
+    }
+  },
+  {
+    "id": "beauty-power-reveal",
+    "file": "beauty-power-reveal-formula.md",
+    "name": "Beauty → Power Reveal",
+    "pitch": "Mở đầu là hỗn chiến tối, không thấy rõ mặt nữ chính. Rồi slow-mo khoe nhan sắc, kẻ địch khựng lại, và một đòn năng lượng quét sạch. Nhịp nhanh, chậm, rồi nổ, kèm hai dòng chữ cố định.",
+    "specs": [
+      "15–30 s · 3–6 shot",
+      "Game CG 3D",
+      "Reel 1080×1270 + dải chữ",
+      "Không thoại · nhạc có drop"
+    ],
+    "timeline": [
+      [
+        "S1",
+        "Hook + hỗn chiến, nữ chính chỉ là bóng mờ"
+      ],
+      [
+        "S2",
+        "Vũ khí địch bị đánh văng, rơi xuống sàn (góc thấp)"
+      ],
+      [
+        "S3",
+        "Slow-mo sau gáy, quay đầu, tông màu chuyển sang lạnh"
+      ],
+      [
+        "S4",
+        "Cận mặt, macro mắt, chớp mắt chậm"
+      ],
+      [
+        "S5",
+        "Địch quỳ, khựng lại; năng lượng tụ quanh tay"
+      ],
+      [
+        "S6",
+        "Chớp sáng đúng drop nhạc, tia năng lượng quét ngang"
+      ]
+    ],
+    "inputs": [
+      "Nữ chính: tóc, phụ kiện, màu mắt, trang phục",
+      "Loại sức mạnh: băng, sét, lửa…(quyết định màu cuối)",
+      "Đấu trường + vũ khí địch sẽ bị tước",
+      "Bài nhạc có khoảng lặng và drop"
+    ],
+    "good_for": [
+      "Reel kiểu game cinematic, fantasy",
+      "Nhân vật \"đẹp mà nguy hiểm\""
+    ],
+    "order": "Làm video beauty power reveal cho <nhân vật>, sức mạnh <băng/sét/lửa…>",
+    "example": {
+      "project": "beauty-power-reveal-sample",
+      "video": "assets/sample/sample_v1.mp4",
+      "label": "Mika (bản thử)"
+    }
+  },
+  {
+    "id": "motion-transfer",
+    "file": "motion-transfer-formula.md",
+    "name": "Motion Transfer (thay nhân vật + bối cảnh)",
+    "pitch": "Giữ nguyên động tác, nhịp, chuyển động máy và thứ tự cắt cảnh của một video có sẵn, nhưng thay người bằng nhân vật của mình và đặt vào bối cảnh của mình. Mỗi tư liệu giữ đúng một vai trò.",
+    "specs": [
+      "4–15 s · khớp video gốc",
+      "Seedance 2 omni_reference",
+      "1 video + 1 nhân vật + N bối cảnh",
+      "Âm thanh môi trường, nhạc ghép khi dựng"
+    ],
+    "timeline": [
+      [
+        "REF",
+        "Video động tác: cỡ cảnh, chuyển động máy, nhịp, thứ tự cắt"
+      ],
+      [
+        "CHAR",
+        "Ảnh nhân vật: mặt, dáng, trang phục (trước, nghiêng, sau)"
+      ],
+      [
+        "SCN",
+        "Ảnh bối cảnh N ↔ shot N: hướng máy, ánh sáng, chất liệu"
+      ],
+      [
+        "ACT",
+        "Tư thế đầu → động tác chính → thu thế; tay ôm đạo cụ, hiệu ứng ở điểm va chạm"
+      ],
+      [
+        "FIX",
+        "Bóng đổ, phản chiếu nền ướt, mưa/bụi đúng thứ tự trước sau"
+      ],
+      [
+        "END",
+        "Dừng ở tư thế cuối của video gốc; âm thanh khớp điểm tiếp xúc"
+      ]
+    ],
+    "inputs": [
+      "Video động tác 4–15 s (≤ 10 MB)",
+      "Ảnh nhân vật / character sheet",
+      "Ảnh bối cảnh cho từng shot của video gốc",
+      "Đạo cụ + hiệu ứng va chạm (nước bắn, bụi, tia lửa)"
+    ],
+    "good_for": [
+      "Remix trend nhảy, võ, động tác có sẵn",
+      "Đưa nhân vật series vào cảnh mới mà vẫn giữ chuyển động thật"
+    ],
+    "order": "Làm video motion transfer: lấy động tác từ <video>, nhân vật <tên>, bối cảnh <ảnh 1–3>"
+  },
+  {
+    "id": "wordless-heartbreak",
+    "file": "wordless-heartbreak-formula.md",
+    "name": "Thất tình không lời (hoạt hình 3D)",
+    "pitch": "Reel hài không thoại: nhân vật thú 3D tặng hết lòng rồi bị đá, khóc phóng đại cùng đám bạn nhậu, rồi lật kèo khi gặp đối tượng mới. Không có rào cản ngôn ngữ nên dễ viral ra nhiều nước (bản tham chiếu đạt 9,2 triệu view).",
+    "specs": [
+      "70–85 s · 28–33 shot · 2–3 s/shot",
+      "16:9 (FB) hoặc 9:16 (TikTok/Shorts), chọn trước khi tạo ảnh",
+      "Seedance 2 Pro multi-shot hoặc Kling i2v 720p, ~10–17 USD/tập",
+      "Không thoại; nhạc rót đúng điểm theo cue map, không phủ suốt"
+    ],
+    "timeline": [
+      [
+        "WOO",
+        "0–10 s: tán CRUSH bằng 3 kiểu (hoa, ô, quà), đổi bối cảnh/ánh sáng"
+      ],
+      [
+        "DUMP",
+        "CRUSH đi với RIVAL; HERO đứng hình trong im lặng, nhạc buồn vào đúng khung hình chi tiết nhỏ rơi xuống"
+      ],
+      [
+        "FLASH",
+        "10 s hồi tưởng màu nâu vàng: những khoảnh khắc ngọt ngào với CRUSH, chớp trắng quay về hiện thực"
+      ],
+      [
+        "DRINK",
+        "18–36 s: đám bạn kéo đi nhậu, tu bia, sặc, gào, lăn ra cỏ; cắt phụt nhạc đúng khung hình phun"
+      ],
+      [
+        "SONG",
+        "36–55 s: BARD đánh đàn buồn, nước mắt chảy thành rãnh, bạn khóc theo"
+      ],
+      [
+        "PEAK",
+        "55–65 s: ECU há mồm khóc thấy răng, bạn hoảng; cắt nhạc khi hậu quả xảy ra"
+      ],
+      [
+        "TWIST",
+        "65–74 s: gặp NEW, lập tức đi tán; bạn ôm nhau cạn lời; nhạc vui nổ đúng lúc HERO hồi sinh"
+      ],
+      [
+        "HOOK",
+        "Tuỳ chọn: NEW/RIVAL liếc ống kính, cắt nhạc + một tiếng chuông"
+      ]
+    ],
+    "inputs": [
+      "Character sheet + identity cho 6 vai (1 món đồ nhận diện cho HERO)",
+      "25–30 ảnh khởi đầu (mỗi shot 1 ảnh, tạo bằng characters)",
+      "1 bối cảnh chính + 2–3 bối cảnh cho beat WOO",
+      "Nhạc buồn guitar + nhạc vui cho TWIST, SFX khóc/sặc/tim vỡ/ding",
+      "Clip hồi tưởng 10 s (HERO + CRUSH) + grade nâu vàng",
+      "2 phiên bản mỗi bản nhạc để chọn cú vào mạnh"
+    ],
+    "good_for": [
+      "Reel viral toàn cầu, không cần lồng tiếng",
+      "Xây kênh linh vật nhiều tập theo lịch: ế Tết, ế Valentine, hết tiền cuối tháng, bị sếp mắng, bị cắm sừng, mùa thi, ăn kiêng"
+    ],
+    "order": "Làm reel <thất tình / ế Tết / ế Valentine / hết tiền / bị sếp mắng / cắm sừng / mùa thi / ăn kiêng> không lời: HERO <con vật + món đồ nhận diện>, bạn nhậu <2 con vật>"
+  },
+  {
+    "id": "artifact-awakening",
+    "file": "artifact-awakening-formula.md",
+    "name": "Artifact Awakening",
+    "pitch": "Cô gái giữ một đạo cụ phát sáng đi giữa thành phố đổ nát. Bóng tối nuốt lấy cô, nổ sét biến hình, cười, thả tim, rồi đạo cụ hoá cổng khổng lồ phá thành phố và glitch cắt cụt. 12 giây, không thoại.",
+    "specs": [
+      "12 s · 7 beat",
+      "9:16 · 720p",
+      "Seedance 2 fast · ~$1.3",
+      "Kling 3 × 5 s · ~$1.5",
+      "Không thoại · nhạc to đều"
+    ],
+    "timeline": [
+      [
+        "0–1.5s",
+        "Đạo cụ xoay trên đầu ngón tay"
+      ],
+      [
+        "1.5–3.5s",
+        "Góc thấp, giày bước qua mặt đường nứt"
+      ],
+      [
+        "3.5–5s",
+        "Khói đen + sét nuốt lấy người"
+      ],
+      [
+        "5–7s",
+        "Nổ sét biến hình, lộ ngoại hình mới"
+      ],
+      [
+        "7–7.5s",
+        "Cận môi cười, slow-mo"
+      ],
+      [
+        "7.5–9.5s",
+        "Đạo cụ bay lên đầu, nháy mắt, thả tim"
+      ],
+      [
+        "9.5–12s",
+        "Flash, tung chiêu, cổng khổng lồ, glitch RGB"
+      ]
+    ],
+    "inputs": [
+      "1 nhân vật (ảnh chính diện + toàn thân)",
+      "Đạo cụ hình học phát sáng + màu năng lượng",
+      "Bối cảnh đầu → bối cảnh cuối",
+      "Một cử chỉ dễ thương"
+    ],
+    "good_for": [
+      "Reel AI cực ngắn, nhiều lượt xem lại",
+      "Nhân vật \"dễ thương mà huỷ diệt\""
+    ],
+    "order": "Làm reel artifact awakening cho <nhân vật>, đạo cụ <khối vuông/quả cầu/lá bài…> màu <màu năng lượng>"
+  }
+]

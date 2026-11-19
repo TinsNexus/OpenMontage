@@ -89,7 +89,15 @@ class TestBacklotServerApi:
     def test_health(self, client):
         response = client.get("/api/health")
         assert response.status_code == 200
-        assert response.json() == {"ok": True, "app": "backlot"}
+        body = response.json()
+        assert body["ok"] is True and body["app"] == "backlot"
+        assert isinstance(body["pid"], int) and body["stale"] is False
+
+    def test_health_reports_stale_code(self, client, monkeypatch):
+        from backlot import server as server_mod
+
+        monkeypatch.setattr(server_mod, "_STARTED_FINGERPRINT", "older")
+        assert client.get("/api/health").json()["stale"] is True
 
     def test_projects_shape_and_state(self, client, projects_root):
         _make_project(projects_root, "film")

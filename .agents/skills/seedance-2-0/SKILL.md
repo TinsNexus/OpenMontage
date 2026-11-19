@@ -43,7 +43,8 @@ Switch away only for a specific reason: strict budget (use the `fast` variant or
 | **HeyGen** | `HEYGEN_API_KEY` | `heygen_video` (1.x only) + TODO | ⚠️ 1.x only | The `seedance_pro` / `seedance_lite` workflow provider strings on HeyGen map to Seedance 1.x. 2.0 access flows through Video Agent / Avatar Shots endpoints — a separate `seedance_heygen` tool is on the roadmap. |
 | **BytePlus ModelArk / Volcengine** | BytePlus token | not wrapped | 🔜 roadmap | Direct from ByteDance. Pro ~$0.15 / 5 s, Lite ~$0.010/s. Token-based. |
 | **Freepik** | Freepik token | not wrapped | 🔜 roadmap | `POST /v1/ai/image-to-video/seedance-pro-1080p` for 1080p I2V |
-| **Pollo / PiAPI / Atlas Cloud / AIMLAPI** | various | not wrapped | 🔜 roadmap | Aggregators resell fal.ai or ByteDance endpoints |
+| **PiAPI** | `PIAPI_API_KEY` | `seedance_piapi` | ✅ wrapped | `model_variant`: `2.5` (Seedance 2.5, 1–30 s, 480p/720p), `standard` / `fast` / `mini` (Seedance 2, 4–15 s), plus `less_restriction` for Seedance 2 tiers. Reference media goes in the prompt as `@image1`, `@video1`, `@audio1`. 720p: 2.5 $0.60/s, standard $0.20/s, fast $0.096/s. Local uploads need a Creator plan. |
+| **Pollo / Atlas Cloud / AIMLAPI** | various | not wrapped | 🔜 roadmap | Aggregators resell fal.ai or ByteDance endpoints |
 
 ### fal.ai model IDs (used by `seedance_video`)
 
@@ -236,7 +237,7 @@ Shot 3 (extreme close-up, rack focus): hero's eyes open, wind whipping.
 |---|---|
 | `duration` | `5`–`8` for hero shots, `10`–`12` for full scenes with multi-shot cuts, `4` for quick inserts. `auto` when unsure. |
 | `aspect_ratio` | `21:9` for cinematic trailers, `16:9` for broadcast / YouTube, `9:16` for Reels/Shorts/TikTok |
-| `resolution` | `720p` default. Drop to `480p` for cost-capped batch previews, not for finals |
+| `resolution` | **`720p` is the project default — for samples and finals alike.** Do not propose a cheaper `480p` preview pass; quote and generate at 720p. Use `480p` only when the user explicitly asks for it. `1080p` only on tiers that support it, on request. |
 | `generate_audio` | Keep **on** unless you have a specific reason to mute — Seedance's moat is synced audio. Strip audio downstream in compose if needed. |
 | `model_variant` | `standard` for hero/cinematic shots; `fast` only for b-roll, previews, or when latency is the hard constraint |
 | `seed` | Set a seed before iterating variants of a chosen shot — everything else held constant |

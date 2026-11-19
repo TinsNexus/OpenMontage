@@ -38,6 +38,10 @@ corpus/
 # User music library (personal royalty-free tracks — not part of repo)
 music_library/
 
+# Shared character library (reference images + identity prompts, reused across
+# projects — personal cast, not part of repo; see lib/characters.py)
+/characters/
+
 # Environment & credentials
 .env
 .env.local
@@ -97,3 +101,15 @@ venv/
 
 # Backlot local cache (thumbnails)
 .backlot/
+
+# Content backlog (ideas + script pointers; personal, see lib/backlog.py)
+/backlog/
+
+# Series wiki (bibles, pages, episodes; personal, see lib/series.py)
+/series/
+
+# Facebook Page analytics snapshots (personal, see backlot/insights.py)
+/insights/
+
+# Product library (affiliate links, product photos; personal, see lib/products.py)
+/products/

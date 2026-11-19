@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Gallery</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Gallery</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/gallery" aria-current="page">Gallery</a>
+      <a href="/">Library</a>
+      <a href="/backlog">Backlog</a>
+      <a href="/series">Series</a>
+      <a href="/tutien">Tu Tiên</a>
+      <a href="/heartbreak">Heartbreak</a>
+      <a href="/insights">Insights</a>
+      <a href="/images">Images</a>
+      <a href="/characters">Characters</a>
+      <a href="/swap">Thay nhân vật</a>
+      <a href="/products">Products</a>
+      <a href="/formulas">Formulas</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="g-layout">
+    <section class="g-list" aria-label="Danh sách video">
+      <div class="g-upload" id="drop">
+        <label class="g-btn primary" for="upload-input">Tải video lên</label>
+        <input id="upload-input" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" hidden>
+        <span class="g-cost" id="upload-status">Video ngoài dự án · kéo thả vào đây · mp4, mov, webm, tối đa 1 GB</span>
+        <div class="g-progress" id="upload-progress" hidden><div></div></div>
+      </div>
+      <div class="g-filter">
+        <input id="search" type="search" placeholder="Lọc theo dự án hoặc tên file…" aria-label="Lọc video">
+      </div>
+      <div id="list"></div>
+      <p class="hint" id="empty" style="display:none">Chưa có video nào trong projects/*/assets/video hoặc renders/.</p>
+    </section>
+
+    <section class="g-detail" id="detail" aria-live="polite">
+      <p class="hint">Chọn một video ở bên trái.</p>
+    </section>
+  </div>
+</div>
+<script type="module" src="/ui/gallery.js"></script>
+</body>
+</html>

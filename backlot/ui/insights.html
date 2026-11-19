@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Insights</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+<link rel="stylesheet" href="/ui/insights.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Insights</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/gallery">Gallery</a>
+      <a href="/">Library</a>
+      <a href="/backlog">Backlog</a>
+      <a href="/series">Series</a>
+      <a href="/tutien">Tu Tiên</a>
+      <a href="/heartbreak">Heartbreak</a>
+      <a href="/insights" aria-current="page">Insights</a>
+      <a href="/images">Images</a>
+      <a href="/characters">Characters</a>
+      <a href="/swap">Thay nhân vật</a>
+      <a href="/products">Products</a>
+      <a href="/formulas">Formulas</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="in-toolbar" id="toolbar" role="group" aria-label="Chọn Page và lần lấy số liệu"></div>
+  <main id="main" aria-live="polite"><p class="hint">Đang tải…</p></main>
+</div>
+<div class="in-tip" id="tip" role="tooltip" hidden></div>
+<script type="module" src="/ui/insights.js"></script>
+</body>
+</html>

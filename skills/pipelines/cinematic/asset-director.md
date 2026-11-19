@@ -81,6 +81,10 @@ Optional generated assets should fill clear gaps:
 
 For motion-required jobs, use `video_selector` first for generated shots. `image_selector` may support look development, concept frames, or embedded design layers, but it does not satisfy the motion requirement by itself.
 
+### 2b. Re-cast An Existing Clip (Face Swap)
+
+When a clip already has the right action, outfit and framing but the wrong face — or the user asks to "thay nhân vật" / put their recurring character into a clip — use `face_swap_piapi` (read `.agents/skills/face-swap-piapi/SKILL.md` first). It changes the face only; body, clothes, background and motion stay. Run `dry_run: true` to get frames and price ($0.004/frame, ≤600 frames), show it to the user, and wait for a yes before the paid run. If the user needs a different outfit or body, it is a new generation (`video_selector` → `seedance_piapi reference_to_video`), not a face swap.
+
 ### 3. Prepare A Real Audio Plan
 
 Store:

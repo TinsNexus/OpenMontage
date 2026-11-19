@@ -241,6 +241,17 @@ music_library/
 
 If the folder has tracks, the proposal and asset stages should present them as options alongside generated music. See the proposal-director and asset-director skills for details.
 
+## Character Library
+
+Recurring characters live in `characters/<id>/` (gitignored; override with `OPENMONTAGE_CHARACTERS_DIR`): a `character.json` with `name`, `description`, `identity` (English appearance text for prompts), `tags`, and reference images (`primary_image` anchors identity). Manage it in Backlot at `/characters` or with `lib/characters.py`.
+
+Rules:
+
+1. **Check the library before designing a character.** At proposal time, list it (`python -c "from lib import characters as c; print([(x['id'], x['name']) for x in c.list_characters()])"`). If the brief names or fits an existing character, offer to reuse it instead of generating new reference images.
+2. **Reuse through the tools, not by copying files.** `seedance_piapi` (`operation: "reference_to_video"`) and `piapi_image` accept `characters: ["<id>", ...]`: the primary images are uploaded as the first references (`@image1..@imageN` / reference image 1..N) and an identity block is prepended to the prompt. Write the rest of the prompt using those same `@imageN` tags.
+3. **Offer to save new characters.** When the user approves a newly generated character image, offer to add it to the library (`charlib.create(...)` + `charlib.add_image(...)`) so later projects reuse it.
+4. Never silently edit or replace another character's primary image — ask first.
+
 ## Available Pipelines
 
 | Pipeline | Best For | Stability |

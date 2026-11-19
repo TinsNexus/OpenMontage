@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Xưởng Heartbreak</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+<link rel="stylesheet" href="/ui/heartbreak.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Xưởng Heartbreak</h1>
+    </div>
+    <span class="chip" id="stat"></span>
+    <nav class="g-nav">
+      <a href="/gallery">Gallery</a>
+      <a href="/">Library</a>
+      <a href="/backlog">Backlog</a>
+      <a href="/series">Series</a>
+      <a href="/tutien">Tu Tiên</a>
+      <a href="/heartbreak" aria-current="page">Heartbreak</a>
+      <a href="/insights">Insights</a>
+      <a href="/images">Images</a>
+      <a href="/characters">Characters</a>
+      <a href="/swap">Thay nhân vật</a>
+      <a href="/products">Products</a>
+      <a href="/formulas">Formulas</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <div class="hb-layout">
+    <aside aria-label="Danh sách tập">
+      <div class="hb-left-head">
+        <h2 class="hb-h">Tập</h2>
+        <button class="g-btn primary" type="button" id="newEp">+ Tập mới</button>
+      </div>
+      <div id="epList"><p class="hint">Đang tải…</p></div>
+    </aside>
+    <main aria-label="Xưởng dựng tập">
+      <div id="stepper" class="hb-steps" role="tablist" aria-label="Các bước dựng tập"></div>
+      <div id="panel"></div>
+    </main>
+  </div>
+</div>
+<script type="module" src="/ui/heartbreak.js"></script>
+</body>
+</html>
