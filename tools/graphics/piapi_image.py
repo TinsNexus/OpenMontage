@@ -344,9 +344,10 @@ class PiAPIImage(BaseTool):
                 written.append(str(path))
         except Exception as e:
             partial = f" ({len(written)}/{n} images written: {written})" if written else ""
+            ids = f" [task_ids: {', '.join(task_ids)}]" if task_ids else ""
             return ToolResult(
                 success=False,
-                error=f"PiAPI image generation failed{partial}: {e}",
+                error=f"PiAPI image generation failed{partial}{ids}: {e}",
                 artifacts=written,
                 cost_usd=round(self.estimate_cost({**inputs, "n": max(len(written), 0)}) if written else 0.0, 3),
             )

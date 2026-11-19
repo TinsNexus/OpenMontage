@@ -169,5 +169,10 @@ def run_task(
                 f"it may still finish — check GET {API_BASE}/task/{task_id}"
             )
         time.sleep(poll_every_s)
-        poll = requests.get(f"{API_BASE}/task/{task_id}", headers=headers, timeout=30)
+        try:
+            poll = requests.get(f"{API_BASE}/task/{task_id}", headers=headers, timeout=30)
+        except (requests.Timeout, requests.ConnectionError):
+            # The task is already created and billed; a flaky poll must not lose it.
+            # Keep the last known status and try again until timeout_s.
+            continue
         task = json_or_error(poll, f"{label} poll task").get("data") or {}
