@@ -39,8 +39,18 @@ Mỗi nhân vật cần một trường `identity`: đoạn mô tả ngoại hì
 
 ## 3. Timeline 70–85 s (khoảng 28–33 shot, 2–3 s mỗi shot)
 
-**Quy tắc 1–2 giây đầu:** shot đầu tiên luôn là **cận mặt HERO đang cầm hoặc đội món đồ nhận diện**, mặt si tình hoặc
-háo hức. Không mở bằng toàn cảnh bối cảnh. Bản gốc mở bằng cận cảnh lừa ôm bó cúc. Dùng luôn khung hình này làm thumbnail.
+> **Thời lượng mặc định cho profile/Reels: 25–45 s** (bản ngắn, 2–4 clip). Chỉ làm bản 70–85 s khi tập trước có
+> thời lượng xem trung bình trên 25 s. Bài học EP.1 "Hai ống hút" (73 s): xem trung bình 10 s (14%), FB dừng đẩy sau 3 giờ.
+
+**Quy tắc 1–2 giây đầu (COLD OPEN, bắt buộc):** khung đầu tiên phải là **khoảnh khắc mạnh nhất hoặc gây tò mò nhất của
+cả tập**, lấy từ beat DUMP/PEAK/TWIST hoặc vật chứng (ví dụ: cận chiếc lông trong vành mũ, HERO phun lửa vì ớt,
+ly có hai ống hút). Giữ 1,5–2 s, kèm **một dòng chữ ngắn tạo câu hỏi** (tối đa 8 chữ, chèn lúc dựng, không để AI vẽ chữ)
+và một âm chạm (một nốt piano, "ting", tiếng sét). Sau đó mới vào WOO như bình thường. Đây vẫn là phim không lời:
+chữ chỉ là câu móc, không phải thoại.
+- **Không bao giờ** mở bằng cảnh vui vẻ yên bình hoặc toàn cảnh bối cảnh. EP.1 mở bằng cảnh hai đứa uống trà sữa
+  trên đồng cỏ: chỉ 38% người xem ở lại quá 3 giây, điểm rơi lớn nhất ở giây thứ 2.
+- Thumbnail dùng chính khung cold open.
+- Kiểm tra trước khi đăng: xem 2 giây đầu ở chế độ tắt tiếng. Nếu không thấy "có chuyện gì đó" thì dựng lại.
 
 | Beat | Thời gian | Nội dung | Gợi ý shot |
 |---|---|---|---|
@@ -59,10 +69,15 @@ Chọn tỉ lệ **trước khi tạo ảnh**, vì đổi sau là phải tạo l
 
 | Nền tảng chính | Tỉ lệ | Ghi chú |
 |---|---|---|
-| Facebook (video thường, feed) | 16:9 | Giống bản gốc. Bố cục rộng, đủ chỗ cho 3 nhân vật đứng cạnh nhau |
-| TikTok, YouTube Shorts, Reels | 9:16 | Dùng nhiều cận cảnh hơn. Đặt BUDDY phía trên và phía dưới HERO thay vì hai bên |
+| **Facebook Reels / profile (mặc định)** | **9:16** | FB Insights chấm "Chất lượng nội dung ➖" cho reel 16:9 vì tỉ lệ khung hình. Tạo thẳng 9:16 trong Seedance (cùng giá) |
+| TikTok, YouTube Shorts | 9:16 | Dùng nhiều cận cảnh hơn. Đặt BUDDY phía trên và phía dưới HERO thay vì hai bên |
+| Facebook video dài (watch/feed, không phải reel) | 16:9 | Chỉ khi cố ý đăng dạng video ngang |
 
-Nếu cần cả hai, ưu tiên làm 9:16 rồi làm bản 16:9 riêng, không crop từ bản kia.
+Nếu buộc phải đổi bản 16:9 có sẵn sang 9:16: cắt dọc theo từng shot cho cảnh một nhân vật; cảnh hai nhân vật đứng xa
+nhau thì đặt khung phóng lớn (rộng 1440) trên nền mờ của chính cảnh đó.
+
+**Phụ đề bắt buộc:** mỗi reel kèm file `.vi_VN.srt` mô tả âm thanh và cảm xúc (`[tiếng mưa]`, `[nhạc tắt]`,
+`[một nốt piano]`) và câu thẻ chữ cuối. Tải lên ở mục Closed captions khi tạo reel. FB cộng điểm "Phụ đề ➕" kể cả với phim không lời.
 
 ## 5. Phong cách hình
 
@@ -323,6 +338,10 @@ Kiểm tra lại ngày Tết của từng năm trước khi lên lịch.
 Nhại một câu thơ hoặc câu nói nổi tiếng về tình yêu, kèm hashtag hài và thất tình.
 Ví dụ: "Yêu là chết ở trong lòng một ít… nhưng gặp đứa mới là sống lại liền" #thattinh #hoathinhhai
 
+**Luôn có một câu kêu gọi chia sẻ hoặc bình luận cụ thể** (EP.1 có 0 share): "Tag đứa từng…", "Bạn là Bụp hay Nga?",
+"Comment 1 chữ nếu bạn từng…". Khi đăng: bật nhãn AI, tải phụ đề, chọn **Share to story → Chỉ chia sẻ reel này**
+(bài đã lên lịch không bật story được nữa, phải bật lúc tạo).
+
 ## 10. Đo kết quả
 
 Sau mỗi lần đăng, ghi lại số liệu vào `insights/` để biết biến thể nào ăn khách mà làm tiếp:
@@ -330,5 +349,8 @@ Sau mỗi lần đăng, ghi lại số liệu vào `insights/` để biết bi�
 - View, reaction, share và comment sau 24 giờ và sau 7 ngày. Luôn lấy cùng một nguồn số liệu (xem ghi chú ở đầu file).
 - Tỉ lệ xem hết và thời lượng xem trung bình, nếu nền tảng có cung cấp.
 - Thời điểm người xem bỏ đi nhiều nhất. Nếu rơi vào beat DRINK hoặc SONG thì cắt ngắn beat đó ở tập sau.
+  Nếu rơi ở 0:01–0:03 thì lỗi nằm ở cold open (xem mục 3), không phải ở nội dung giữa.
+- Mục tiêu tự đặt (ước lượng, không phải số FB công bố): xem quá 3 giây ≥ 60% view, xem trung bình ≥ 35% thời lượng, tỉ lệ thích ≥ 2%.
+  Mốc so sánh EP.1 "Hai ống hút" sau 21 giờ: 375 view, 3 giây 38%, xem TB 10 s/73 s, thích 0,48%, 0 share.
 
 Biến thể nào có share và view cao gấp đôi mức trung bình của kênh thì làm tập tiếp theo cùng chủ đề, giữ nguyên móc HOOK.

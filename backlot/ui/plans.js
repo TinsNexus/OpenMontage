@@ -25,6 +25,7 @@ const fmtViews = (n) => {
 function episodeStatus(ep, now) {
   const post = parseDate(ep.post_date);
   if (ep.posted) return { cls: "done", label: ep.views != null ? `Đã đăng · ${fmtViews(ep.views)} view` : "Đã đăng" };
+  if (ep.scheduled_at) return { cls: "ready", label: `Đã lên lịch · ${ep.scheduled_at.slice(11) || ep.scheduled_at}` };
   if (ep.awaiting_human) return { cls: "wait", label: `Chờ duyệt · ${ep.active_stage}` };
   if (ep.active_stage) return { cls: "run", label: `Đang làm · ${ep.active_stage}` };
   if (ep.project_exists && ep.stage_total && ep.completed_count === ep.stage_total) return { cls: "ready", label: "Sẵn sàng đăng" };
