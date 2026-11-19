@@ -32,7 +32,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backlot import images as imagegen, insights as insightslib, social, swap as swaplib, thumbs, tutien
+from backlot import heartbreak, images as imagegen, insights as insightslib, social, swap as swaplib, thumbs, tutien
 from lib import backlog as backloglib, characters as charlib, plans as planlib, products as prodlib, series as serieslib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
@@ -750,10 +750,68 @@ def create_app() -> FastAPI:
         return await asyncio.to_thread(_tutien_call, tutien.start_command, str(payload.get("text") or ""),
                                        int(ep) if ep else None)
 
+    @app.post("/api/tutien/posts/generate")
+    async def tutien_posts_generate(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "tutien-social")
+        try:
+            return await asyncio.to_thread(_tutien_call, tutien.generate_posts, int(payload.get("episode") or 0),
+                                           str(payload.get("platform") or "all"), str(payload.get("notes") or "")[:1000])
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.post("/api/tutien/posts/{n}/{platform}")
+    async def tutien_post_save(n: int, platform: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "tutien")
+        return await asyncio.to_thread(_tutien_call, tutien.save_post, n, platform, payload)
+
     @app.post("/api/tutien/jobs/{job_id}/cancel")
     async def tutien_cancel(job_id: str, request: Request) -> dict:
         _require_action(request, "tutien")
         return await asyncio.to_thread(_tutien_call, tutien.cancel, job_id)
+
+    # ---- Heartbreak studio (Xưởng Heartbreak) ----------------------------
+
+    def _heartbreak_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e).strip("'\""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.get("/api/heartbreak")
+    async def heartbreak_episodes() -> dict:
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.list_episodes)
+
+    @app.post("/api/heartbreak/episodes")
+    async def heartbreak_create(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "heartbreak")
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.create_episode,
+                                       str(payload.get("title") or ""), str(payload.get("idea") or ""),
+                                       payload.get("slots"), str(payload.get("length") or "short"))
+
+    @app.get("/api/heartbreak/{slug}")
+    async def heartbreak_episode(slug: str) -> dict:
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.get_episode, slug)
+
+    @app.get("/api/heartbreak/{slug}/prices")
+    async def heartbreak_prices(slug: str) -> dict:
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.price_table, slug)
+
+    @app.post("/api/heartbreak/{slug}/prompts")
+    async def heartbreak_write_prompts(slug: str, request: Request, payload: dict = Body(default={})) -> dict:
+        _require_action(request, "heartbreak-paid")
+        try:
+            return await asyncio.to_thread(_heartbreak_call, heartbreak.write_prompts, slug,
+                                           str((payload or {}).get("notes") or ""))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.post("/api/heartbreak/{slug}/prompts/{clip_id}")
+    async def heartbreak_save_prompt(slug: str, clip_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "heartbreak")
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.save_prompt, slug, clip_id,
+                                       payload.get("prompt"))
 
     # ---- Backlog -------------------------------------------------------
 
