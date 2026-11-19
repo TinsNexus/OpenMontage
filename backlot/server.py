@@ -32,7 +32,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backlot import images as imagegen, insights as insightslib, social, swap as swaplib, thumbs
+from backlot import images as imagegen, insights as insightslib, social, swap as swaplib, thumbs, tutien
 from lib import backlog as backloglib, characters as charlib, plans as planlib, products as prodlib, series as serieslib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
@@ -709,6 +709,52 @@ def create_app() -> FastAPI:
         await asyncio.to_thread(_series_call, serieslib.delete_episode, series_id, episode_id)
         return {"ok": True}
 
+    # ---- Võng Giới Tu Tiên control room ----------------------------------
+
+    def _tutien_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyError as e:
+            raise HTTPException(status_code=404, detail=str(e).strip("'\""))
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+
+    @app.get("/api/tutien")
+    async def tutien_plan() -> dict:
+        return await asyncio.to_thread(_tutien_call, tutien.get_plan)
+
+    @app.get("/api/tutien/jobs")
+    async def tutien_jobs() -> dict:
+        return {"jobs": await asyncio.to_thread(tutien.list_jobs)}
+
+    @app.post("/api/tutien/counts")
+    async def tutien_counts(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "tutien")
+        return await asyncio.to_thread(_tutien_call, tutien.set_counts, payload)
+
+    @app.post("/api/tutien/episodes/{n}")
+    async def tutien_episode(n: int, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "tutien")
+        return await asyncio.to_thread(_tutien_call, tutien.update_episode, n, payload)
+
+    @app.post("/api/tutien/render")
+    async def tutien_render(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "tutien-render")
+        return await asyncio.to_thread(_tutien_call, tutien.start_render, int(payload.get("episode") or 0),
+                                       str(payload.get("platform") or "all"))
+
+    @app.post("/api/tutien/command")
+    async def tutien_command(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "tutien-command")
+        ep = payload.get("episode")
+        return await asyncio.to_thread(_tutien_call, tutien.start_command, str(payload.get("text") or ""),
+                                       int(ep) if ep else None)
+
+    @app.post("/api/tutien/jobs/{job_id}/cancel")
+    async def tutien_cancel(job_id: str, request: Request) -> dict:
+        _require_action(request, "tutien")
+        return await asyncio.to_thread(_tutien_call, tutien.cancel, job_id)
+
     # ---- Backlog -------------------------------------------------------
 
     def _backlog_call(fn, *args, **kwargs):
@@ -1295,6 +1341,10 @@ def create_app() -> FastAPI:
     @app.get("/backlog")
     async def backlog_page() -> HTMLResponse:
         return _ui_html("backlog.html", ("board.css", "gallery.css", "backlog.css", "backlog.js", "plans.js"))
+
+    @app.get("/tutien")
+    async def tutien_page() -> HTMLResponse:
+        return _ui_html("tutien.html", ("board.css", "gallery.css", "tutien.css", "tutien.js"))
 
     @app.get("/series")
     async def series_page_ui() -> HTMLResponse:

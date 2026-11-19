@@ -4,14 +4,38 @@
     {
       "name": "backlot",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "backlot", "serve", "--port", "4750"],
+      "runtimeArgs": [
+        "-m",
+        "backlot",
+        "serve",
+        "--port",
+        "4750"
+      ],
       "port": 4750
     },
     {
       "name": "mockups",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "http.server", "4788", "--bind", "127.0.0.1"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4788",
+        "--bind",
+        "127.0.0.1"
+      ],
       "port": 4788
+    },
+    {
+      "name": "backlot-4751",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": [
+        "-m",
+        "backlot",
+        "serve",
+        "--port",
+        "4751"
+      ],
+      "port": 4751
     }
   ]
 }

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Backlot — Tu Tiên</title>
+<link rel="stylesheet" href="/ui/board.css">
+<link rel="stylesheet" href="/ui/gallery.css">
+<link rel="stylesheet" href="/ui/tutien.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="slate">
+    <div class="clapper"></div>
+    <div>
+      <span class="wordmark">Backlot</span>
+      <h1>Võng Giới Tu Tiên</h1>
+    </div>
+    <span class="chip" id="count"></span>
+    <nav class="g-nav">
+      <a href="/gallery">Gallery</a>
+      <a href="/">Library</a>
+      <a href="/backlog">Backlog</a>
+      <a href="/series">Series</a>
+      <a href="/tutien" aria-current="page">Tu Tiên</a>
+      <a href="/insights">Insights</a>
+      <a href="/images">Images</a>
+      <a href="/characters">Characters</a>
+      <a href="/swap">Thay nhân vật</a>
+      <a href="/products">Products</a>
+      <a href="/formulas">Formulas</a>
+    </nav>
+    <div class="spacer"></div>
+  </header>
+
+  <section class="tt-top">
+    <div class="tt-card" id="realms" aria-label="Cảnh giới từng kênh"></div>
+    <div class="tt-card tt-cmd">
+      <h2>Ra lệnh</h2>
+      <p class="hint">Gửi yêu cầu cho Claude (chạy nền trong repo, sửa file và chạy check). Chọn tập để Claude biết đang nói về tập nào.</p>
+      <div class="tt-cmd-row">
+        <select id="cmdEp" aria-label="Tập"></select>
+        <button class="g-btn primary" type="button" id="cmdSend">Gửi lệnh</button>
+      </div>
+      <textarea id="cmdText" rows="3" placeholder="Ví dụ: Tập 3 dựng theo kịch bản trong plan, bản Facebook dùng style thủy mặc giống tập 2…"></textarea>
+      <p class="tt-err" id="cmdErr" role="alert"></p>
+    </div>
+  </section>
+
+  <div class="tt-layout">
+    <section aria-label="Kế hoạch tu luyện từng tập">
+      <h2 class="tt-h">Kế hoạch tu luyện</h2>
+      <div id="episodes"></div>
+    </section>
+    <aside aria-label="Tiến trình">
+      <h2 class="tt-h">Tiến trình</h2>
+      <div id="jobs"><p class="hint">Chưa có tác vụ nào.</p></div>
+    </aside>
+  </div>
+</div>
+<script type="module" src="/ui/tutien.js"></script>
+</body>
+</html>

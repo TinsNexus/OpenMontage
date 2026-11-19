@@ -1,0 +1,66 @@
+/* Võng Giới Tu Tiên control room */
+.tt-top { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; margin: 6px 0 22px; }
+.tt-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; min-width: 0; }
+.tt-card h2, .tt-h { margin: 0 0 10px; font-size: calc(13px * var(--fs-scale)); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+.tt-h { margin: 0 0 12px; }
+
+.tt-realms { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tt-realm { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 12px; min-width: 0; }
+.tt-realm .pl { font-size: calc(11px * var(--fs-scale)); color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; }
+.tt-realm .rn { font-size: calc(16px * var(--fs-scale)); font-weight: 600; color: var(--amber); margin: 4px 0 8px; }
+.tt-realm label { display: flex; align-items: center; gap: 6px; font-size: calc(12px * var(--fs-scale)); color: var(--text-2); }
+.tt-realm input { width: 100%; min-width: 0; font: inherit; font-size: calc(14px * var(--fs-scale)); color: var(--text); background: var(--surface-3); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+.tt-bar { height: 6px; border-radius: 3px; background: var(--border-soft); overflow: hidden; margin: 10px 0 4px; }
+.tt-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--amber), var(--green)); }
+.tt-realm .nx { font-size: calc(11px * var(--fs-scale)); color: var(--text-3); }
+.tt-realms-foot { display: flex; justify-content: flex-end; margin-top: 10px; gap: 8px; align-items: center; }
+
+.tt-cmd textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: calc(13px * var(--fs-scale)); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px; resize: vertical; }
+.tt-cmd-row { display: flex; gap: 8px; margin: 6px 0 8px; }
+.tt-cmd-row select { flex: 1; min-width: 0; font: inherit; font-size: calc(13px * var(--fs-scale)); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 6px 8px; }
+.tt-err { color: var(--red); font-size: calc(12px * var(--fs-scale)); margin: 6px 0 0; min-height: 1em; }
+
+.tt-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; align-items: start; }
+.tt-ep { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+.tt-ep.gate { border-color: rgba(240, 168, 60, .45); }
+.tt-ep-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tt-ep-head .no { font-family: var(--mono, monospace); color: var(--text-3); font-size: calc(12px * var(--fs-scale)); }
+.tt-ep-head h3 { margin: 0; font-size: calc(16px * var(--fs-scale)); font-weight: 600; color: var(--text); }
+.tt-ep-head .sp { flex: 1; }
+.tt-st { font-size: calc(11px * var(--fs-scale)); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-2); }
+.tt-st.rendered, .tt-st.posted { color: var(--green); border-color: rgba(79, 194, 131, .45); }
+.tt-st.rendering { color: var(--amber); border-color: rgba(240, 168, 60, .45); }
+.tt-ep p { margin: 6px 0; font-size: calc(13px * var(--fs-scale)); color: var(--text-2); }
+.tt-ep p b { color: var(--text); font-weight: 600; }
+.tt-goals { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.tt-goal { font-size: calc(12px * var(--fs-scale)); background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 7px; padding: 4px 8px; color: var(--text-2); }
+.tt-goal.hit { color: var(--green); border-color: rgba(79, 194, 131, .35); }
+.tt-vers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.tt-ver { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 8px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.tt-ver .h { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: calc(12px * var(--fs-scale)); color: var(--text-2); }
+.tt-ver .h b { color: var(--text); }
+.tt-ver .sty { font-size: calc(11px * var(--fs-scale)); color: var(--text-3); min-height: 1.2em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tt-ver video { width: 100%; aspect-ratio: 9 / 16; background: var(--media-bg); border-radius: 6px; object-fit: contain; }
+.tt-ver .none { aspect-ratio: 9 / 16; border-radius: 6px; border: 1px dashed var(--border); display: flex; align-items: center; justify-content: center; color: var(--text-3); font-size: calc(12px * var(--fs-scale)); text-align: center; padding: 8px; }
+.tt-ver .g-btn { width: 100%; }
+.tt-ep-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+.tt-ep-actions .hint { padding: 0; }
+.tt-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.tt-edit label { display: flex; flex-direction: column; gap: 4px; font-size: calc(11px * var(--fs-scale)); color: var(--text-2); }
+.tt-edit .full { grid-column: 1 / -1; }
+.tt-edit input, .tt-edit select, .tt-edit textarea { font: inherit; font-size: calc(13px * var(--fs-scale)); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; min-width: 0; }
+
+.tt-job { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.tt-job .h { display: flex; gap: 8px; align-items: center; font-size: calc(12px * var(--fs-scale)); }
+.tt-job .h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; }
+.tt-job .s { font-size: calc(11px * var(--fs-scale)); }
+.tt-job .s.running { color: var(--amber); } .tt-job .s.done { color: var(--green); } .tt-job .s.failed, .tt-job .s.interrupted { color: var(--red); }
+.tt-job pre { margin: 8px 0 0; max-height: 220px; overflow: auto; font-family: var(--mono, monospace); font-size: calc(11px * var(--fs-scale)); color: var(--text-2); white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border-radius: 6px; padding: 8px; }
+.tt-job .meta { font-size: calc(11px * var(--fs-scale)); color: var(--text-3); margin-top: 4px; }
+
+@media (max-width: 1100px) {
+  .tt-top, .tt-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 700px) {
+  .tt-realms, .tt-vers, .tt-edit { grid-template-columns: 1fr; }
+}
