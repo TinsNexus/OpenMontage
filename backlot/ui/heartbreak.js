@@ -1,5 +1,5 @@
-// Xưởng Heartbreak — wordless-heartbreak reel studio (steps 1–3; M3–M5 come later).
-import { el, fmtAgo, getJSON } from "/ui/lib.js";
+// Xưởng Heartbreak — wordless-heartbreak reel studio (steps 1–4; M4–M5 come later).
+import { el, fmtAgo, getJSON, mediaURL } from "/ui/lib.js";
 
 const THEME_KEY = "backlot.theme";
 const $ = (id) => document.getElementById(id);
@@ -45,10 +45,15 @@ let pricesLoading = false;
 let step = 1;
 let creating = false;
 let action = false;   // a POST is in flight — freeze re-renders
+let estimate = null;  // per-clip generation cost (step 4)
+let estimateErr = null;
+let estLoading = false;
+let jobs = [];        // background clip-generation jobs
+let jobsLoaded = false;
 
 // Re-render is only safe when nothing is being typed into / sent.
 function busy() {
-  if (creating || action || pricesLoading) return true;
+  if (creating || action || pricesLoading || estLoading) return true;
   const a = document.activeElement;
   return !!(a && ["INPUT", "TEXTAREA", "SELECT"].includes(a.tagName) && a.closest("#panel"));
 }
@@ -85,7 +90,7 @@ function renderList() {
 function maxStep() {
   if (creating) return 1;
   if (!ep) return 1;
-  return ep.clips && ep.clips.length ? 3 : 2;
+  return ep.clips && ep.clips.length ? 4 : 2;
 }
 
 function renderStepper() {
@@ -411,10 +416,189 @@ function pricePanel() {
       el("span", { class: "hint" }, ep.model_id ? `Đang dùng: ${modelName}` : "Chưa chọn — dòng Mặc định được gợi ý."), err));
 }
 
-/* ---------------- placeholder steps (M3–M5) ---------------- */
+/* ---------------- step 4: clip generation (M3) ---------------- */
+async function loadEstimate() {
+  const res = await fetch(`/api/heartbreak/${slug}/estimate`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { estimate = null; estimateErr = data.detail || `HTTP ${res.status}`; return; }
+  estimate = data;
+  estimateErr = null;
+}
+
+async function loadJobs() {
+  try {
+    const data = await getJSON(`/api/heartbreak/${slug}/jobs`);
+    jobs = data.jobs || [];
+  } catch { jobs = []; }
+}
+
+const estFor = (id) => (estimate && estimate.clips || []).find((r) => r.id === id);
+
+async function generateClip(clip, btn, errBox, opts) {
+  const row = estFor(clip.id);
+  const n = (clip.versions || []).length + 1;
+  const extra = opts && opts.extraUsd ? opts.extraUsd : (row ? row.usd : 0);
+  const what = (clip.versions || []).length ? `Tạo lại clip ${clip.id} (bản ${n})` : `Tạo clip ${clip.id} (bản 1)`;
+  const lr = opts && opts.lessRestriction;
+  const msg = lr
+    ? `${what} với less_restriction? Tốn thêm ~${usd(extra)} — đây là tiền thật, chắc chắn chưa?`
+    : `${what}? Ước tính ~${usd(extra)} — trừ thật khi chạy.`;
+  if (!confirm(msg)) return;
+  action = true;
+  btn.disabled = true;
+  if (errBox) errBox.textContent = "";
+  try {
+    await post(`/api/heartbreak/${slug}/clips/${encodeURIComponent(clip.id)}/generate`,
+               lr ? { less_restriction: true } : {}, "heartbreak-paid");
+    await refreshEp();
+    await loadJobs();
+    estimate = null;
+    render();
+  } catch (e) {
+    if (errBox) errBox.textContent = e.message;
+    btn.disabled = false;
+    action = false;
+  }
+}
+
+function takeBox(clip, v, i) {
+  const chosen = clip.chosen === i;
+  const pick = el("button", { class: "g-btn", type: "button" }, "Chọn bản này");
+  pick.addEventListener("click", async () => {
+    action = true;
+    pick.disabled = true;
+    try {
+      await post(`/api/heartbreak/${slug}/clips/${encodeURIComponent(clip.id)}/choose`,
+                 { index: i }, "heartbreak");
+      await refreshEp();
+      estimate = null;
+      render();
+    } catch (e) {
+      alert(`Không chọn được: ${e.message}`);
+      pick.disabled = false;
+      action = false;
+    }
+  });
+  return el("div", { class: `hb-take${chosen ? " picked" : ""}` },
+    el("video", { src: mediaURL(slug, v.file), controls: "", preload: "metadata", playsinline: "",
+                  "aria-label": `Clip ${clip.id} bản ${i + 1}` }),
+    el("div", { class: "meta" },
+      el("span", {}, `Bản #${i + 1} · ${usd(v.cost)} · ${fmtAgo(v.created_at)}`
+        + (v.resolution ? ` · ${v.resolution}` : "")),
+      el("div", { class: "row" },
+        chosen ? el("span", { class: "hb-chip green" }, "✓ Đang dùng") : pick)));
+}
+
+function jobBox(j) {
+  if (j.status === "running") {
+    return el("div", { class: "hb-job running" },
+      el("span", {}, `⏳ Đang tạo clip ${j.clip} (bản ${j.version})… ước tính ${usd(j.estimate_usd)}`));
+  }
+  if (j.status === "interrupted") {
+    return el("div", { class: "hb-job warn" },
+      el("span", {}, `⏹ Clip ${j.clip} (bản ${j.version}) bị dừng khi server khởi động lại — tạo lại nếu cần.`));
+  }
+  if (j.status !== "failed") return null;
+  const box = el("div", { class: "hb-job failed" },
+    el("b", {}, `✕ Lỗi clip ${j.clip} (bản ${j.version})`),
+    el("p", {}, j.error || "Không rõ lỗi."));
+  if (j.advice) {
+    const p = el("p", { class: "advice" }, `💡 ${j.advice.message}`);
+    box.append(p);
+    if (j.advice.retry) {
+      const clip = (ep.clips || []).find((c) => c.id === j.clip);
+      if (clip) {
+        const retry = el("button", { class: "g-btn primary", type: "button" },
+          `Thử less_restriction (tốn thêm ${usd(j.advice.extra_usd)})`);
+        retry.addEventListener("click", () =>
+          generateClip(clip, retry, null, { lessRestriction: true, extraUsd: j.advice.extra_usd }));
+        box.append(retry);
+      }
+    }
+  }
+  return box;
+}
+
+function genCard(clip, row) {
+  const versions = clip.versions || [];
+  const running = jobs.find((j) => j.status === "running" && j.clip === clip.id);
+  const failed = jobs.filter((j) => j.status === "failed" && j.clip === clip.id)[0];
+  const err = el("span", { class: "hb-err" });
+  const btn = el("button", { class: "g-btn primary", type: "button" },
+    versions.length ? "Tạo lại" : "Tạo clip");
+  if (running) { btn.disabled = true; btn.textContent = "Đang tạo…"; }
+  btn.addEventListener("click", () => generateClip(clip, btn, err));
+
+  return el("article", { class: "hb-clip" },
+    el("div", { class: "head" },
+      el("span", { class: "id" }, `CLIP ${clip.id}`),
+      ...(clip.beats || []).map((b) => el("span", { class: "hb-chip" }, b)),
+      el("span", { class: "hb-chip" }, `${clip.duration}s`),
+      el("span", { class: `hb-chip ${clip.status === "approved" ? "green" : "amber"}` },
+        clip.status === "approved" ? "✓ đã chọn bản" : "chưa duyệt"),
+      el("span", { style: "flex:1" }),
+      el("span", { class: "hb-chip" }, `${versions.length} bản`)),
+    versions.length
+      ? el("div", { class: "hb-takes" }, ...versions.map((v, i) => takeBox(clip, v, i)))
+      : el("p", { class: "hint" }, "Chưa có bản nào — bấm “Tạo clip” để Seedance/Kling dựng clip này."),
+    el("div", { class: "row" }, btn,
+      el("span", { class: "hint" }, row ? `~${usd(row.usd)}/bản` : ""),
+      failed && !running ? el("span", { class: "hint" }, "lần tạo trước lỗi — xem dưới") : null,
+      err));
+}
+
+function clipPanel() {
+  const boxes = [];
+  if (estimateErr) {
+    boxes.push(el("div", { class: "hb-job failed" }, estimateErr));
+  } else if (!estimate) {
+    boxes.push(el("div", { class: "hb-todo" }, el("div", { class: "big" }, "⏳"), "Đang tính giá tạo clip…"));
+  } else {
+    const pending = estimate.pending_ids;
+    const allBtn = el("button", { class: "g-btn primary", type: "button" },
+      `Tạo tất cả clip (${pending.length} · ~${usd(estimate.pending_usd)})`);
+    if (!pending.length || jobs.some((j) => j.status === "running")) allBtn.disabled = true;
+    const err = el("span", { class: "hb-err" });
+    allBtn.addEventListener("click", async () => {
+      if (!confirm(`Tạo ${pending.length} clip còn lại với tổng ~${usd(estimate.pending_usd)}? `
+        + "Đây là tiền thật — mỗi lần tạo là một lần tính phí.")) return;
+      action = true;
+      allBtn.disabled = true;
+      err.textContent = "";
+      try {
+        await post(`/api/heartbreak/${slug}/clips/generate`, {}, "heartbreak-paid");
+        await refreshEp();
+        await loadJobs();
+        estimate = null;
+        render();
+      } catch (e) {
+        err.textContent = e.message;
+        allBtn.disabled = false;
+        action = false;
+      }
+    });
+
+    boxes.push(el("section", { class: "hb-card" },
+      el("h2", {}, "Bước 4 — Tạo clip"),
+      el("p", {}, `Model: ${estimate.model_id || "mặc định"} · đã chi ${usd(estimate.spent_usd)} `
+        + `· còn ${pending.length} clip chưa duyệt (~${usd(estimate.pending_usd)}).`),
+      el("p", { class: "hint" }, "Mỗi lần tạo là một lần tốn tiền thật — xem video, ưng thì “Chọn bản này”, "
+        + "chưa ưng thì “Tạo lại”."),
+      el("div", { class: "hb-actions" }, allBtn, err)));
+
+    const jobBoxes = jobs.map(jobBox).filter(Boolean);
+    if (jobBoxes.length) boxes.push(el("section", { class: "hb-card" }, el("h2", {}, "Job đang chạy / lỗi"), ...jobBoxes));
+
+    boxes.push(el("section", { class: "hb-card" },
+      el("h2", {}, `Clip (${ep.clips.length})`),
+      ...ep.clips.map((c) => genCard(c, estFor(c.id)))));
+  }
+  return boxes;
+}
+
+/* ---------------- placeholder steps (M4–M5) ---------------- */
 function todoPanel(n) {
   const copy = {
-    4: ["🎬", "Tạo clip sẽ có ở milestone M3: chạy Seedance/Kling nền, xem từng bản, chọn bản đẹp."],
     5: ["✂️", "Ghép video sẽ có ở milestone M4: cold open, chữ hook, nhạc theo beat, xuất 9:16 + .srt."],
     6: ["📝", "Caption sẽ có ở milestone M5: viết caption Facebook kèm nhãn AI, đánh dấu đã đăng."],
   }[n];
@@ -437,6 +621,7 @@ function renderPanel() {
   if (step === 1) box.append(summaryPanel());
   else if (step === 2) box.append(promptPanel());
   else if (step === 3) box.append(pricePanel());
+  else if (step === 4) box.append(...clipPanel());
   else box.append(todoPanel(step));
 }
 
@@ -448,6 +633,14 @@ function render() {
   if (step === 3 && !creating && ep && ep.clips && ep.clips.length && !prices && !pricesErr && !pricesLoading) {
     pricesLoading = true;
     loadPrices().finally(() => { pricesLoading = false; render(); });
+  }
+  if (step === 4 && !creating && ep && ep.clips && ep.clips.length && !estimate && !estimateErr && !estLoading) {
+    estLoading = true;
+    loadEstimate().finally(() => { estLoading = false; render(); });
+  }
+  if (step === 4 && !creating && ep && !jobsLoaded) {
+    jobsLoaded = true;
+    loadJobs().finally(() => render());
   }
 }
 
@@ -467,9 +660,11 @@ async function select(s) {
   slug = s;
   creating = false;
   prices = null; pricesErr = null;
+  estimate = null; estimateErr = null;
+  jobs = []; jobsLoaded = false;
   try { ep = await getJSON(`/api/heartbreak/${slug}`); }
   catch (e) { $("panel").replaceChildren(el("p", { class: "hb-err" }, `Không mở được tập: ${e.message}`)); return; }
-  step = ep.clips && ep.clips.length ? 3 : 2;
+  step = ep.clips && ep.clips.length ? (ep.model_id ? 4 : 3) : 2;
   render();
 }
 
@@ -480,7 +675,7 @@ async function loadAll() {
   if (!slug && eps.length && !creating) {
     slug = eps[0].slug;
     try { ep = await getJSON(`/api/heartbreak/${slug}`); } catch { ep = null; }
-    step = ep && ep.clips && ep.clips.length ? 3 : 2;
+    step = ep && ep.clips && ep.clips.length ? (ep.model_id ? 4 : 3) : 2;
   }
   render();
 }
@@ -496,13 +691,17 @@ loadAll().catch((e) => {
   $("panel").replaceChildren(el("p", { class: "hb-err" }, `Không tải được Xưởng Heartbreak: ${e.message}`));
 });
 
-// Light polling: refresh list + open episode when idle (page load/refresh never POSTs).
+// Light polling: refresh list + open episode + jobs when idle (page load/refresh never POSTs).
 setInterval(async () => {
   if (busy()) return;
   try {
-    const before = JSON.stringify([eps, ep]);
+    const before = JSON.stringify([eps, ep, jobs]);
     await loadList();
     await refreshEp();
-    if (JSON.stringify([eps, ep]) !== before) render();
+    if (ep && ep.clips && ep.clips.length) await loadJobs();
+    if (JSON.stringify([eps, ep, jobs]) !== before) {
+      estimate = null;          // approvals/spend changed -> re-price on next render
+      render();
+    }
   } catch { /* transient — try again next tick */ }
 }, 4000);

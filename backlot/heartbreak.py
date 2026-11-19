@@ -11,9 +11,12 @@ Each episode is a normal cinematic-pipeline project plus an extra
         artifacts/clipA.txt    # one prompt file per clip
         checkpoint_*.json      # research/proposal/script/scene_plan (lib.checkpoint)
 
-Milestone 1 covers episode creation, AI prompt writing (PiAPI chat, ~$0.01),
-manual prompt edits and the price table. Clip generation (M3) and compose (M4)
-come later. The only paid call in this module is ``write_prompts()``.
+Milestones 1–3 cover episode creation, AI prompt writing (PiAPI chat, ~$0.01),
+manual prompt edits, the price table, and background clip-generation jobs
+(Seedance/Kling video, charged per take). Compose (M4) comes later. The paid
+calls in this module are ``write_prompts()`` and the video jobs started by
+``generate_clip()`` / ``generate_all()`` — both only ever run on an explicit
+user click, never on page load.
 """
 from __future__ import annotations
 
@@ -23,6 +26,7 @@ import re
 import threading
 import time
 import unicodedata
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -136,12 +140,14 @@ def _write_clip_file(slug: str, clip: dict[str, Any]) -> None:
 
 
 def _write_ckpt(slug: str, stage: str, status: str, artifacts: dict[str, Any], *,
-                human_approved: bool = False, metadata: Optional[dict] = None) -> None:
+                human_approved: bool = False, metadata: Optional[dict] = None,
+                cost_snapshot: Optional[dict] = None) -> None:
     write_checkpoint(
         PROJECTS_DIR, slug, stage, status, artifacts,
         pipeline_type=PIPELINE_TYPE,
         human_approved=human_approved,
         metadata=metadata,
+        cost_snapshot=cost_snapshot,
     )
 
 
@@ -883,3 +889,462 @@ def set_model(slug: str, model_id: str) -> dict[str, Any]:
         studio["model_id"] = row["id"]
         _save_studio(slug, studio)
     return {**studio, "slug": slug}
+
+
+# ---------------------------------------------------------------------------
+# clip generation jobs (M3)
+# ---------------------------------------------------------------------------
+
+_JOBS_CAP = 60
+# PiAPI moderation/refusal phrasings (English) — matched case-insensitively.
+_MODERATION_MARKERS = (
+    "content rejection", "content rejections", "rejected", "moderation",
+    "sensitive content", "policy", "violation", "inappropriate", "nsfw",
+    "unsafe", "blocked by", "filthy", "obscene",
+)
+_active_jobs: set[str] = set()      # job ids running in THIS process
+
+
+def _jobs_path(slug: str) -> Path:
+    return _project_dir(slug) / ".jobs" / "jobs.json"
+
+
+def _job_log_path(slug: str, job_id: str) -> Path:
+    return _project_dir(slug) / ".jobs" / f"{job_id}.log"
+
+
+def _load_jobs(slug: str) -> list[dict[str, Any]]:
+    jobs = _read_json(_jobs_path(slug), [])
+    return jobs if isinstance(jobs, list) else []
+
+
+def _append_job_unlocked(slug: str, job: dict[str, Any]) -> None:
+    """Insert a job at the top of the registry (``_lock`` must be held)."""
+    jobs = [j for j in _load_jobs(slug) if j.get("id") != job.get("id")]
+    jobs.insert(0, job)
+    _write_json(_jobs_path(slug), jobs[:_JOBS_CAP])
+
+
+def list_jobs(slug: str) -> dict[str, Any]:
+    """Generation jobs for one episode; orphans become ``interrupted``.
+
+    A job left ``running`` in jobs.json but not in ``_active_jobs`` means the
+    server restarted while it ran (same rule as ``tutien.list_jobs``).
+    """
+    _load_studio(slug)                    # validates the episode (KeyError -> 404)
+    jobs = _load_jobs(slug)
+    changed = False
+    for j in jobs:
+        if j.get("status") == "running" and j.get("id") not in _active_jobs:
+            j["status"] = "interrupted"
+            changed = True
+    if changed:
+        with _lock:
+            _write_json(_jobs_path(slug), jobs[:_JOBS_CAP])
+    return {"slug": slug, "jobs": jobs}
+
+
+def _find_clip(studio: dict[str, Any], clip_id: str) -> dict[str, Any]:
+    clip = next((c for c in studio.get("clips") or [] if c.get("id") == clip_id), None)
+    if clip is None:
+        raise KeyError(f"clip {clip_id} không có trong tập")
+    return clip
+
+
+def _cast_images(studio: dict[str, Any]) -> list[str]:
+    """Primary image of every filled slot, in ``@imageN`` order (SLOT_ORDER)."""
+    mapping = _reference_mapping(studio)
+    out = []
+    for m in mapping:
+        char = charlib.get(m["character"])
+        path = char.get("primary_path")
+        if not path or not Path(path).is_file():
+            raise ValueError(f"Nhân vật {m['name']} (slot {m['slot']}) chưa có ảnh chính — "
+                             "vào Characters thêm ảnh trước khi tạo clip.")
+        out.append(str(path))
+    return out
+
+
+def _kling_prompt(studio: dict[str, Any], prompt: str) -> str:
+    """Kling has no multi-reference mode: ``@imageN`` tags must become names."""
+    text = prompt
+    for i, m in enumerate(_reference_mapping(studio), 1):
+        text = text.replace(f"@image{i}", m["name"])
+    return text
+
+
+def _generation_inputs(studio: dict[str, Any], clip: dict[str, Any], *,
+                       less_restriction: bool = False,
+                       output_path: Optional[Path] = None) -> tuple[str, dict[str, Any]]:
+    """Build tool inputs for one take (tool name, inputs dict).
+
+    Seedance gets the full treatment from the brief: ``reference_to_video``
+    with the slots' primary images as ``@imageN`` references, 9:16, the chosen
+    variant/resolution. Kling 3.0 has no multi-reference API, so it uses the
+    HERO image as the first frame instead (``image_path``) and the prompt's
+    ``@imageN`` tags are rewritten to character names.
+    """
+    model = studio.get("model") or dict(DEFAULT_MODEL)
+    tool = str(model.get("tool") or "seedance_piapi")
+    duration = int(clip["duration"])
+    prompt = str(clip.get("prompt") or "").strip()
+    if not prompt:
+        raise ValueError(f"Clip {clip.get('id')} chưa có prompt — viết prompt (bước 2) trước.")
+
+    if tool == "seedance_piapi":
+        inputs: dict[str, Any] = {
+            "prompt": prompt,
+            "operation": "reference_to_video",
+            "reference_image_paths": _cast_images(studio),
+            "aspect_ratio": "9:16",
+            "duration": duration,
+            "model_variant": str(model.get("model_variant") or "fast"),
+            "resolution": str(model.get("resolution") or "720p"),
+        }
+        if less_restriction:
+            inputs["less_restriction"] = True
+    else:
+        images = _cast_images(studio)
+        inputs = {
+            "prompt": _kling_prompt(studio, prompt),
+            "image_path": images[0],            # HERO is the first filled slot
+            "aspect_ratio": "9:16",
+            "duration": duration,
+            "version": str(model.get("version") or "3.0"),
+            "mode": str(model.get("mode") or "std"),
+        }
+    if output_path is not None:
+        inputs["output_path"] = str(output_path)
+    return tool, inputs
+
+
+def _estimate(tool: str, inputs: dict[str, Any]) -> float:
+    """Local price math via the tools' own estimate_cost (no network)."""
+    if tool == "seedance_piapi":
+        from tools.video import seedance_piapi
+        return float(seedance_piapi.SeedancePiAPI().estimate_cost(inputs) or 0.0)
+    from tools.video import kling_piapi
+    return float(kling_piapi.KlingPiAPI().estimate_cost(inputs) or 0.0)
+
+
+def generation_estimate(slug: str) -> dict[str, Any]:
+    """Per-clip cost of one take with the CURRENT model (local math, no API)."""
+    studio = _load_studio(slug)
+    clips = studio.get("clips") or []
+    if not clips:
+        raise ValueError("Chưa có prompt clip — hãy viết prompt (bước 2) trước.")
+    model = studio.get("model") or dict(DEFAULT_MODEL)
+    rows = []
+    for c in clips:
+        tool, inputs = _generation_inputs(studio, c)
+        rows.append({
+            "id": c["id"],
+            "duration": c["duration"],
+            "usd": round(_estimate(tool, inputs), 2),
+            "versions": len(c.get("versions") or []),
+            "chosen": c.get("chosen"),
+            "status": c.get("status") or "draft",
+        })
+    pending = [r for r in rows if r["status"] != "approved"]
+    return {
+        "slug": slug,
+        "model": model,
+        "model_id": studio.get("model_id"),
+        "clips": rows,
+        "pending_ids": [r["id"] for r in pending],
+        "pending_usd": round(sum(r["usd"] for r in pending), 2),
+        "total_usd": round(sum(r["usd"] for r in rows), 2),
+        "spent_usd": float(studio.get("spent_usd") or 0.0),
+    }
+
+
+def generate_clip(slug: str, clip_id: str, *, less_restriction: bool = False) -> dict[str, Any]:
+    """Start one take of ``clip_id`` in a background thread (paid, PiAPI video).
+
+    Validates everything (episode, clip, prompt, references, model, no
+    duplicate job) and builds the tool inputs BEFORE any state is written, so
+    a rejected request never leaves a job record behind.
+    """
+    with _lock:
+        studio = _load_studio(slug)
+        if not studio.get("clips"):
+            raise ValueError("Chưa có prompt clip — hãy viết prompt (bước 2) trước khi tạo clip.")
+        clip = _find_clip(studio, clip_id)
+        model = studio.get("model") or dict(DEFAULT_MODEL)
+        tool_name = str(model.get("tool") or "seedance_piapi")
+        if less_restriction and tool_name != "seedance_piapi":
+            raise ValueError("less_restriction chỉ có trên Seedance — model hiện tại là Kling. "
+                             "Hãy sửa prompt hoặc đổi model (bước 3).")
+        if any(j.get("status") == "running" and j.get("clip") == clip_id and j.get("id") in _active_jobs
+               for j in _load_jobs(slug)):
+            raise ValueError(f"Clip {clip_id} đang được tạo — chờ job xong rồi tạo lại.")
+        versions = clip.get("versions") or []
+        n = len(versions) + 1
+        rel = f"assets/video/clip{clip_id}_v{n}.mp4"
+        tool, inputs = _generation_inputs(studio, clip, less_restriction=less_restriction,
+                                          output_path=_project_dir(slug) / rel)
+        estimate = round(_estimate(tool, inputs), 2)
+        job = {
+            "id": "g-" + uuid.uuid4().hex[:8],
+            "kind": "clip",
+            "slug": slug,
+            "clip": clip_id,
+            "version": n,
+            "file": rel,
+            "title": f"Tạo clip {clip_id} v{n} — {studio.get('title', slug)}",
+            "status": "running",
+            "started": time.time(),
+            "estimate_usd": estimate,
+            "less_restriction": bool(less_restriction),
+            "tool": tool,
+            "model_id": studio.get("model_id"),
+        }
+        # first take of the episode opens the assets stage (before the job is
+        # visible, so a poller never sees a half-written checkpoint)
+        if not any(c.get("versions") for c in studio.get("clips") or []):
+            ckpt_err = _safe_assets_ckpt(slug, studio)
+            if ckpt_err:
+                job["checkpoint_error"] = ckpt_err
+        _append_job_unlocked(slug, job)
+        _active_jobs.add(job["id"])
+        _write_job_log(slug, job, f"$ {tool} clip {clip_id} v{n} · {clip['duration']}s · "
+                                  f"ước tính ${estimate:.2f}\n")
+
+    threading.Thread(target=_run_clip_job, args=(slug, job), daemon=True,
+                     name=f"hb-{job['id']}").start()
+    return job
+
+
+def generate_all(slug: str) -> dict[str, Any]:
+    """Start a take for every not-yet-approved clip (one confirm in the UI)."""
+    est = generation_estimate(slug)
+    targets = [r["id"] for r in est["clips"] if r["status"] != "approved"]
+    if not targets:
+        raise ValueError("Tất cả clip đã chọn bản — không còn clip nào cần tạo.")
+    with _lock:
+        jobs = _load_jobs(slug)
+        running = [j for j in jobs if j.get("status") == "running" and j.get("id") in _active_jobs]
+        if running:
+            raise ValueError(f"Đang có {len(running)} clip đang tạo — chờ job xong rồi tạo tiếp.")
+        # stale "running" rows from a previous process can't block a new run
+        orphans = [j for j in jobs if j.get("status") == "running"]
+        if orphans:
+            for j in orphans:
+                j["status"] = "interrupted"
+            _write_json(_jobs_path(slug), jobs[:_JOBS_CAP])
+    started = [generate_clip(slug, cid) for cid in targets]
+    return {
+        "slug": slug,
+        "started": started,
+        "clips": len(started),
+        "estimate_usd": est["pending_usd"],
+    }
+
+
+def choose_version(slug: str, clip_id: str, index: Any) -> dict[str, Any]:
+    """Mark one take as THE take (``chosen`` + ``status="approved"``)."""
+    try:
+        idx = int(index)
+    except (TypeError, ValueError):
+        raise ValueError("index phải là số nguyên (bản clip).")
+    with _lock:
+        studio = _load_studio(slug)
+        clip = _find_clip(studio, clip_id)
+        versions = clip.get("versions") or []
+        if not versions:
+            raise ValueError(f"Clip {clip_id} chưa có bản nào để chọn — hãy tạo trước.")
+        if idx < 0 or idx >= len(versions):
+            raise ValueError(f"Bản #{index} không có trong clip {clip_id} (chỉ {len(versions)} bản).")
+        clip["chosen"] = idx
+        clip["status"] = "approved"
+        _save_studio(slug, studio)
+        ckpt_err = _safe_assets_ckpt(slug, studio)
+        if ckpt_err:
+            raise ValueError(f"Đã chọn bản, nhưng ghi checkpoint assets lỗi: {ckpt_err}")
+        return clip
+
+
+# ---- background runner -----------------------------------------------------
+
+def _write_job_log(slug: str, job: dict[str, Any], text: str) -> None:
+    try:
+        _write_text(_job_log_path(slug, job["id"]), text)
+    except OSError:
+        pass
+
+
+def _is_moderation(error: str) -> bool:
+    low = (error or "").lower()
+    return any(m in low for m in _MODERATION_MARKERS)
+
+
+def _failure_advice(slug: str, job: dict[str, Any], studio: dict[str, Any],
+                    error: str) -> Optional[dict[str, Any]]:
+    """The formula's advice after a refusal: retry with ``less_restriction``."""
+    if not _is_moderation(error):
+        return None
+    if job.get("tool") != "seedance_piapi":
+        return {"kind": "edit_prompt", "retry": False, "extra_usd": 0.0,
+                "message": "Kling không có less_restriction — sửa prompt cho bớt cảnh nhạy cảm "
+                           "hoặc đổi model sang Seedance (bước 3) rồi tạo lại."}
+    if job.get("less_restriction"):
+        return {"kind": "edit_prompt", "retry": False, "extra_usd": 0.0,
+                "message": "Đã thử less_restriction mà vẫn bị bộ lọc từ chối — hãy sửa prompt "
+                           "(bớt cảnh nhạy cảm) rồi tạo lại."}
+    # what would the same take cost with less_restriction on?
+    clip = next((c for c in studio.get("clips") or [] if c.get("id") == job.get("clip")), None)
+    extra = 0.0
+    if clip is not None:
+        try:
+            tool, base = _generation_inputs(studio, clip)
+            _, lr = _generation_inputs(studio, clip, less_restriction=True)
+            extra = round(max(_estimate(tool, lr) - _estimate(tool, base), 0.0), 2)
+        except (ValueError, KeyError):
+            extra = 0.0
+    return {"kind": "less_restriction", "retry": True, "extra_usd": extra,
+            "message": "Bộ lọc nội dung của Seedance từ chối prompt này. Công thức khuyên thử lại "
+                       f"với less_restriction (tốn thêm ~${extra:.2f}/bản) — cần bạn xác nhận."}
+
+
+def _asset_manifest(studio: dict[str, Any]) -> dict[str, Any]:
+    model = studio.get("model") or dict(DEFAULT_MODEL)
+    assets = []
+    for c in studio.get("clips") or []:
+        for i, v in enumerate(c.get("versions") or [], 1):
+            entry: dict[str, Any] = {
+                "id": f"clip{c['id']}_v{i}",
+                "type": "video",
+                "path": v.get("file"),
+                "source_tool": v.get("tool") or model.get("tool") or "seedance_piapi",
+                "scene_id": f"sc_clip{c['id']}",
+                "model": v.get("model") or studio.get("model_id") or model.get("model_variant"),
+                "cost_usd": float(v.get("cost") or 0.0),
+                "duration_seconds": int(c.get("duration") or 0),
+                "prompt": c.get("prompt"),
+            }
+            if v.get("resolution"):
+                entry["resolution"] = str(v["resolution"])
+            assets.append(entry)
+    return {"version": "1.0", "assets": assets,
+            "total_cost_usd": round(float(studio.get("spent_usd") or 0.0), 2)}
+
+
+def _safe_assets_ckpt(slug: str, studio: dict[str, Any]) -> Optional[str]:
+    """Write the ``assets`` checkpoint (must run under ``_lock``).
+
+    - no take yet           -> ``in_progress``
+    - takes, not all chosen -> ``awaiting_human``
+    - every clip approved    -> ``completed`` + ``human_approved=True``
+
+    Returns an error string instead of raising: bookkeeping must never kill
+    an already-paid take (callers surface it on the job record).
+    """
+    clips = studio.get("clips") or []
+    has_take = any(c.get("versions") for c in clips)
+    all_approved = bool(clips) and all(c.get("status") == "approved" for c in clips)
+    cost = {"total_spent_usd": round(float(studio.get("spent_usd") or 0.0), 3),
+            "total_reserved_usd": 0.0}
+    try:
+        if all_approved:
+            manifest = _asset_manifest(studio)
+            _save_artifact(slug, "asset_manifest", manifest)
+            _write_ckpt(slug, "assets", "completed", {"asset_manifest": manifest},
+                        human_approved=True, cost_snapshot=cost,
+                        metadata={"approval": "user clicked 'Chọn bản này' for every clip"})
+        elif has_take:
+            manifest = _asset_manifest(studio)
+            _save_artifact(slug, "asset_manifest", manifest)
+            _write_ckpt(slug, "assets", "awaiting_human", {"asset_manifest": manifest},
+                        cost_snapshot=cost,
+                        metadata={"partial_progress": {
+                            "clips_total": len(clips),
+                            "clips_approved": sum(1 for c in clips if c.get("status") == "approved"),
+                            "takes": sum(len(c.get("versions") or []) for c in clips),
+                        }})
+        else:
+            _write_ckpt(slug, "assets", "in_progress", {}, cost_snapshot=cost,
+                        metadata={"partial_progress": {"note": "clip generation started"}})
+        return None
+    except Exception as e:
+        return str(e)[:300]
+
+
+def _run_clip_job(slug: str, job: dict[str, Any]) -> None:
+    """Thread body: run the video tool, record the take, charge the cost."""
+    log_lines = [f"$ {job.get('tool')} · clip {job['clip']} v{job['version']} · "
+                 f"{'less_restriction ' if job.get('less_restriction') else ''}"
+                 f"ước tính ${job.get('estimate_usd', 0):.2f}\n"]
+    try:
+        studio = _load_studio(slug)
+        clip = _find_clip(studio, job["clip"])
+        tool, inputs = _generation_inputs(studio, clip,
+                                          less_restriction=bool(job.get("less_restriction")),
+                                          output_path=_project_dir(slug) / job["file"])
+        log_lines.append(f"prompt: {str(clip.get('prompt'))[:500]}\n")
+        if tool == "seedance_piapi":
+            from tools.video import seedance_piapi
+            result = seedance_piapi.SeedancePiAPI().execute(inputs)
+        else:
+            from tools.video import kling_piapi
+            result = kling_piapi.KlingPiAPI().execute(inputs)
+    except Exception as e:
+        _finish_job(slug, job, error=str(e)[:600], log_lines=log_lines)
+        return
+
+    if result.success:
+        _finish_job(slug, job, cost=round(float(result.cost_usd or 0.0), 3),
+                    data=result.data or {}, log_lines=log_lines)
+    else:
+        _finish_job(slug, job, error=(result.error or "Tạo clip thất bại.")[:600],
+                    log_lines=log_lines)
+
+
+def _finish_job(slug: str, job: dict[str, Any], *, error: Optional[str] = None,
+                cost: float = 0.0, data: Optional[dict[str, Any]] = None,
+                log_lines: Optional[list[str]] = None) -> None:
+    job.update(status="failed" if error else "done", ended=time.time())
+    data = data or {}
+    if error:
+        job["error"] = error
+        log_lines = (log_lines or []) + [f"lỗi: {error}\n"]
+    else:
+        job["output"] = job["file"]
+        job["cost_usd"] = cost
+        if data.get("resolution"):
+            job["resolution"] = str(data["resolution"])
+        log_lines = (log_lines or []) + [f"ok: {job['file']} (${cost:.2f})\n"]
+
+    with _lock:
+        try:
+            studio = _load_studio(slug)
+            clip = next((c for c in studio.get("clips") or [] if c.get("id") == job["clip"]), None)
+            if clip is None and not error:
+                job["warning"] = f"clip {job['clip']} biến mất (prompt đã viết lại) — bản đã tạo vẫn ở {job['file']}"
+            elif not error:
+                take = {"file": job["file"], "cost": cost, "created_at": time.time(),
+                        "tool": job.get("tool"), "less_restriction": bool(job.get("less_restriction"))}
+                if data.get("resolution"):
+                    take["resolution"] = str(data["resolution"])
+                if data.get("task_id"):
+                    take["task_id"] = str(data["task_id"])
+                clip.setdefault("versions", []).append(take)
+                studio["spent_usd"] = round(float(studio.get("spent_usd") or 0.0) + cost, 3)
+                _save_studio(slug, studio)
+            if error and clip is not None:
+                advice = _failure_advice(slug, job, studio, error)
+                if advice:
+                    job["advice"] = advice
+            if not error or clip is not None:
+                ckpt_err = _safe_assets_ckpt(slug, studio)
+                if ckpt_err:
+                    job["checkpoint_error"] = ckpt_err
+        except Exception as e:                    # project deleted mid-run / bookkeeping bug
+            job["finish_error"] = str(e)[:300]
+        finally:
+            # Persist the terminal state BEFORE leaving the active set: a
+            # poller must never observe "running" without an owner, or it
+            # would wrongly flip the job to "interrupted".
+            _append_job_unlocked(slug, job)
+            _active_jobs.discard(job["id"])
+    if log_lines is not None:
+        _write_job_log(slug, job, "".join(log_lines))

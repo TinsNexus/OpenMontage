@@ -819,6 +819,39 @@ def create_app() -> FastAPI:
         return await asyncio.to_thread(_heartbreak_call, heartbreak.save_prompt, slug, clip_id,
                                        payload.get("prompt"))
 
+    @app.get("/api/heartbreak/{slug}/jobs")
+    async def heartbreak_jobs(slug: str) -> dict:
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.list_jobs, slug)
+
+    @app.get("/api/heartbreak/{slug}/estimate")
+    async def heartbreak_estimate(slug: str) -> dict:
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.generation_estimate, slug)
+
+    @app.post("/api/heartbreak/{slug}/clips/generate")
+    async def heartbreak_generate_all(slug: str, request: Request, payload: dict = Body(default={})) -> dict:
+        _require_action(request, "heartbreak-paid")
+        try:
+            return await asyncio.to_thread(_heartbreak_call, heartbreak.generate_all, slug)
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.post("/api/heartbreak/{slug}/clips/{clip_id}/generate")
+    async def heartbreak_generate_clip(slug: str, clip_id: str, request: Request,
+                                       payload: dict = Body(default={})) -> dict:
+        _require_action(request, "heartbreak-paid")
+        try:
+            return await asyncio.to_thread(_heartbreak_call, heartbreak.generate_clip, slug, clip_id,
+                                           less_restriction=bool((payload or {}).get("less_restriction")))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.post("/api/heartbreak/{slug}/clips/{clip_id}/choose")
+    async def heartbreak_choose_version(slug: str, clip_id: str, request: Request,
+                                        payload: dict = Body(...)) -> dict:
+        _require_action(request, "heartbreak")
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.choose_version, slug, clip_id,
+                                       (payload or {}).get("index"))
+
     # ---- Backlog -------------------------------------------------------
 
     def _backlog_call(fn, *args, **kwargs):

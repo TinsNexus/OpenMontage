@@ -79,6 +79,24 @@ table.hb-prices .tag.now { border-color: rgba(79, 194, 131, .5); color: var(--gr
 .hb-todo { text-align: center; padding: 34px 16px; color: var(--text-3); font-size: calc(13px * var(--fs-scale)); }
 .hb-todo .big { font-size: calc(22px * var(--fs-scale)); margin-bottom: 8px; }
 
+/* clip takes (step 4) */
+.hb-takes { display: grid; gap: 8px; margin-top: 10px; }
+.hb-take { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 10px; align-items: center; background: var(--surface-3); border: 1px solid var(--border-soft); border-radius: 9px; padding: 8px 10px; }
+.hb-take.picked { border-color: rgba(79, 194, 131, .55); background: rgba(79, 194, 131, .06); }
+.hb-take video { width: 78px; aspect-ratio: 9 / 16; object-fit: cover; background: #000; border-radius: 6px; border: 1px solid var(--border); }
+.hb-take .meta { display: flex; flex-direction: column; gap: 6px; font-size: calc(12px * var(--fs-scale)); color: var(--text-2); min-width: 0; }
+.hb-take .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* generation jobs */
+.hb-job { border-radius: 9px; border: 1px solid var(--border-soft); background: var(--surface-2); padding: 10px 12px; margin-bottom: 8px; font-size: calc(12px * var(--fs-scale)); color: var(--text-2); }
+.hb-job.running { border-color: rgba(240, 168, 60, .45); }
+.hb-job.warn { border-color: rgba(240, 168, 60, .45); }
+.hb-job.failed { border-color: rgba(224, 82, 82, .5); }
+.hb-job.failed b { color: var(--red); }
+.hb-job p { margin: 6px 0; }
+.hb-job .advice { color: var(--amber); }
+.hb-job button { margin-top: 6px; }
+
 @media (max-width: 1000px) {
   .hb-layout { grid-template-columns: 1fr; }
   .hb-form { grid-template-columns: 1fr; }
