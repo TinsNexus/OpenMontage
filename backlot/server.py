@@ -13,7 +13,10 @@ into ``projects/<id>/assets/images/`` (see ``backlot.images``). The
 content backlog file (see ``lib.backlog``), ``/api/series`` edits the
 series wiki under ``series/`` (see ``lib.series``), and user-triggered
 ``POST /api/insights/...`` pull Facebook Page snapshots and LLM advice into
-``insights/facebook/`` (see ``backlot.insights``).
+``insights/facebook/`` (see ``backlot.insights``). ``/api/swap`` creates
+character-swap jobs as ``projects/swap-*/`` (video, character image, previews,
+renders and ``swap.json``) and runs paid PiAPI face swaps for them (see
+``backlot.swap``).
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backlot import images as imagegen, insights as insightslib, social, thumbs
+from backlot import images as imagegen, insights as insightslib, social, swap as swaplib, thumbs
 from lib import backlog as backloglib, characters as charlib, plans as planlib, products as prodlib, series as serieslib
 from backlot.state import PROJECTS_DIR, REPO_ROOT, list_projects, load_board_state, summarize_project
 
@@ -976,6 +979,153 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail="image not found")
         return FileResponse(path)
 
+    # ---- Character swap ("Thay nhân vật") ------------------------------
+
+    def _swap_call(fn, *args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="unknown swap job")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
+    @app.get("/api/swap")
+    async def swap_list() -> list:
+        return await asyncio.to_thread(swaplib.list_jobs)
+
+    @app.get("/api/swap/options")
+    async def swap_options() -> dict:
+        def build() -> dict:
+            chars = []
+            for c in charlib.list_characters():
+                if not c["primary_image"]:
+                    continue
+                face = next((i["file"] for i in c["images"] if i.get("role") == "face"), None)
+                chars.append({"id": c["id"], "name": c["name"], "image": face or c["primary_image"]})
+            return {"modes": swaplib.MODES, "characters": chars, "price_per_frame": swaplib.PRICE_PER_FRAME,
+                    "character_image_cost": swaplib.CHARACTER_IMAGE_COST, "max_frames": swaplib.MAX_RANGE_FRAMES}
+        return await asyncio.to_thread(build)
+
+    @app.get("/api/swap/{job_id}")
+    async def swap_get(job_id: str) -> dict:
+        return await asyncio.to_thread(_swap_call, swaplib.get, job_id)
+
+    @app.post("/api/swap")
+    async def swap_create(request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "swap")
+        return await asyncio.to_thread(_swap_call, swaplib.create, str(payload.get("title") or ""))
+
+    @app.post("/api/swap/{job_id}/delete")
+    async def swap_delete(job_id: str, request: Request) -> dict:
+        _require_action(request, "swap")
+        await asyncio.to_thread(_swap_call, swaplib.delete, job_id)
+        return {"deleted": job_id}
+
+    @app.post("/api/swap/{job_id}/upload")
+    async def swap_upload(job_id: str, request: Request) -> dict:
+        """Upload the source video (raw body, name in ``X-File-Name``)."""
+        _require_action(request, "swap")
+        from urllib.parse import unquote
+
+        original = unquote(request.headers.get("x-file-name") or "")
+        target = await asyncio.to_thread(_swap_call, swaplib.upload_path, job_id, original)
+        if int(request.headers.get("content-length") or 0) > swaplib.UPLOAD_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="video larger than 500 MB")
+        part = target.with_name(target.name + ".part")
+        written = 0
+        try:
+            with part.open("wb") as fh:
+                async for chunk in request.stream():
+                    written += len(chunk)
+                    if written > swaplib.UPLOAD_MAX_BYTES:
+                        raise HTTPException(status_code=413, detail="video larger than 500 MB")
+                    fh.write(chunk)
+            if not written:
+                raise HTTPException(status_code=422, detail="empty upload")
+            part.replace(target)
+        finally:
+            part.unlink(missing_ok=True)
+        return await asyncio.to_thread(_swap_call, swaplib.finish_upload, job_id, target, original)
+
+    @app.post("/api/swap/{job_id}/link")
+    async def swap_link(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "swap")
+        return await asyncio.to_thread(_swap_call, swaplib.start_download, job_id, str(payload.get("url") or ""))
+
+    @app.post("/api/swap/{job_id}/range")
+    async def swap_range(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "swap")
+        try:
+            start, end = float(payload.get("start") or 0), float(payload.get("end"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="start and end must be numbers")
+        return await asyncio.to_thread(_swap_call, swaplib.set_range, job_id, start, end)
+
+    @app.post("/api/swap/{job_id}/character/upload")
+    async def swap_char_upload(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "swap")
+        import base64
+
+        try:
+            data = base64.b64decode(str(payload.get("data_base64") or "").split(",", 1)[-1], validate=True)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="data_base64 is not valid base64")
+        return await asyncio.to_thread(_swap_call, swaplib.character_from_upload, job_id,
+                                       str(payload.get("file_name") or ""), data)
+
+    @app.post("/api/swap/{job_id}/character/library")
+    async def swap_char_library(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "swap")
+        _char_or_404(str(payload.get("char_id") or ""))
+        return await asyncio.to_thread(_swap_call, swaplib.character_from_library, job_id,
+                                       str(payload["char_id"]), str(payload.get("file") or "") or None)
+
+    @app.post("/api/swap/{job_id}/character/generate")
+    async def swap_char_generate(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Paid: one Nano Banana image (~$0.03) that waits for approval."""
+        _require_action(request, "swap")
+        char_id = str(payload.get("char_id") or "")
+        if char_id:
+            _char_or_404(char_id)
+        return await asyncio.to_thread(_swap_call, swaplib.character_generate, job_id,
+                                       str(payload.get("prompt") or ""), name=str(payload.get("name") or ""),
+                                       char_id=char_id)
+
+    @app.post("/api/swap/{job_id}/character/approve")
+    async def swap_char_approve(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "swap")
+        return await asyncio.to_thread(_swap_call, swaplib.approve_character, job_id,
+                                       save_to_library=bool(payload.get("save_to_library")),
+                                       name=str(payload.get("name") or ""))
+
+    @app.post("/api/swap/{job_id}/character/reject")
+    async def swap_char_reject(job_id: str, request: Request) -> dict:
+        _require_action(request, "swap")
+        return await asyncio.to_thread(_swap_call, swaplib.reject_character, job_id)
+
+    @app.post("/api/swap/{job_id}/preview")
+    async def swap_preview(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Paid: swap one frame ($0.01)."""
+        _require_action(request, "swap")
+        try:
+            at = float(payload.get("time") or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="time must be a number")
+        return await asyncio.to_thread(_swap_call, swaplib.preview, job_id, at)
+
+    @app.post("/api/swap/{job_id}/run")
+    async def swap_run(job_id: str, request: Request, payload: dict = Body(...)) -> dict:
+        """Paid: start a background frame-by-frame swap ($0.01/frame)."""
+        _require_action(request, "swap")
+        return await asyncio.to_thread(_swap_call, swaplib.run, job_id, str(payload.get("kind") or "test"))
+
+    @app.post("/api/swap/{job_id}/cancel")
+    async def swap_cancel(job_id: str, request: Request) -> dict:
+        _require_action(request, "swap")
+        return await asyncio.to_thread(_swap_call, swaplib.cancel, job_id)
+
     # ---- Product library -----------------------------------------------
 
     def _product_call(fn, *args, **kwargs):
@@ -1134,6 +1284,10 @@ def create_app() -> FastAPI:
     async def images_page() -> HTMLResponse:
         return _ui_html("images.html", ("board.css", "gallery.css", "images.js"))
 
+    @app.get("/swap")
+    async def swap_page() -> HTMLResponse:
+        return _ui_html("swap.html", ("board.css", "gallery.css", "swap.css", "swap.js"))
+
     @app.get("/characters")
     async def characters_page() -> HTMLResponse:
         return _ui_html("characters.html", ("board.css", "gallery.css", "characters.js"))
@@ -1196,7 +1350,7 @@ def create_app() -> FastAPI:
     async def ui_no_cache(request, call_next):
         response = await call_next(request)
         path = request.url.path
-        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights", "/series", "/products") or path.startswith("/ui") or path.startswith("/p/"):
+        if path in ("/", "/gallery", "/images", "/characters", "/backlog", "/insights", "/series", "/products", "/swap") or path.startswith("/ui") or path.startswith("/p/"):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
