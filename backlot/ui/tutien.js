@@ -12,6 +12,7 @@ let plan = null;
 let jobs = [];
 let editing = null; // episode number being edited
 
+async function post_(url, body, action) { return post(url, body, action); }
 async function post(url, body, action) {
   const res = await fetch(url, {
     method: "POST",
@@ -70,7 +71,80 @@ function versionBox(ep, p) {
   return el("div", { class: "tt-ver" },
     el("div", { class: "h" }, el("b", {}, meta.label), el("span", {}, info)),
     el("div", { class: "sty", title: style }, style),
-    media, btn);
+    media, btn, postBox(ep, p));
+}
+
+/* ---------------- captions + hashtags ---------------- */
+const postText = (post, p) => {
+  const title = p === "youtube" && post.titles && post.titles[0] ? post.titles[0] + "\n\n" : "";
+  return `${title}${post.caption}\n\n${(post.hashtags || []).join(" ")}`.trim();
+};
+async function copyToClipboard(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = el("textarea", {}, text); document.body.append(ta); ta.select();
+    try { document.execCommand("copy"); } finally { ta.remove(); }
+  }
+  const old = btn.textContent; btn.textContent = "Đã chép ✓"; setTimeout(() => { btn.textContent = old; }, 1400);
+}
+const openPosts = new Set();   // "n:platform" boxes the user expanded or is editing
+const editingPost = new Set();
+
+function postBox(ep, p) {
+  const key = `${ep.n}:${p}`;
+  const post = (ep.posts || {})[p];
+  const det = el("details", { class: "tt-post" });
+  if (openPosts.has(key) || editingPost.has(key)) det.open = true;
+  det.addEventListener("toggle", () => { det.open ? openPosts.add(key) : openPosts.delete(key); });
+  det.append(el("summary", {}, post ? "Caption & hashtag" : "Caption & hashtag (chưa có)"));
+  const err = el("p", { class: "tt-err" });
+  const gen = el("button", { class: "g-btn", type: "button", onclick: async () => {
+    gen.disabled = true; gen.textContent = "Đang viết…"; err.textContent = "";
+    try { const r = await post_(`/api/tutien/posts/generate`, { episode: ep.n, platform: p }, "tutien-social"); applyPosts(ep.n, r.posts); }
+    catch (e) { err.textContent = e.message; }
+    gen.disabled = false; gen.textContent = post ? "Viết lại bằng AI" : "Tạo bằng AI";
+  } }, post ? "Viết lại bằng AI" : "Tạo bằng AI");
+  gen.title = "Viết qua PiAPI chat (~0,01 USD)";
+
+  if (editingPost.has(key)) {
+    const titles = el("input", { type: "text", value: (post?.titles || []).join(" | "), "aria-label": "Tiêu đề (cách nhau bằng |)" });
+    const cap = el("textarea", { rows: "6", "aria-label": "Caption" }, post?.caption || "");
+    const tags = el("input", { type: "text", value: (post?.hashtags || []).join(" "), "aria-label": "Hashtag" });
+    const save = el("button", { class: "g-btn primary", type: "button", onclick: async () => {
+      save.disabled = true; err.textContent = "";
+      try {
+        const saved = await post_(`/api/tutien/posts/${ep.n}/${p}`, {
+          titles: titles.value.split("|").map((t) => t.trim()).filter(Boolean),
+          caption: cap.value, hashtags: tags.value.split(/[\s,]+/).filter(Boolean),
+        }, "tutien");
+        editingPost.delete(key); applyPosts(ep.n, { [p]: saved });
+      } catch (e) { err.textContent = e.message; save.disabled = false; }
+    } }, "Lưu");
+    det.append(el("div", { class: "tt-post-edit" },
+      el("label", {}, "Tiêu đề (cách nhau bằng |)", titles), el("label", {}, "Caption", cap), el("label", {}, "Hashtag", tags),
+      el("div", { class: "row" }, save, el("button", { class: "g-btn", type: "button", onclick: () => { editingPost.delete(key); renderEpisodes(); } }, "Hủy")), err));
+    return det;
+  }
+  if (post) {
+    const copy = el("button", { class: "g-btn primary", type: "button", onclick: () => copyToClipboard(postText(post, p), copy) }, "Sao chép");
+    det.append(...[
+      p === "youtube" && post.titles?.length ? el("div", { class: "ttl" }, post.titles[0]) : null,
+      el("div", { class: "cap" }, post.caption),
+      el("div", { class: "tags" }, (post.hashtags || []).join(" ")),
+      el("div", { class: "row" }, copy,
+        el("button", { class: "g-btn", type: "button", onclick: () => { editingPost.add(key); renderEpisodes(); } }, "Sửa"), gen),
+      el("div", { class: "meta" }, `${post.source === "ai" ? "AI" : "Viết tay"} · ${fmtAgo(post.created_at)}`),
+      err].filter(Boolean));
+  } else {
+    det.append(el("div", { class: "row" }, gen,
+      el("button", { class: "g-btn", type: "button", onclick: () => { editingPost.add(key); renderEpisodes(); } }, "Tự viết")), err);
+  }
+  return det;
+}
+function applyPosts(n, posts) {
+  const ep = plan.episodes.find((e) => e.n === n);
+  ep.posts = Object.assign({}, ep.posts || {}, posts);
+  renderEpisodes();
 }
 
 function editForm(ep) {
@@ -142,7 +216,12 @@ function renderEpisodes() {
       const cmd = el("button", { class: "g-btn", type: "button", onclick: () => {
         $("cmdEp").value = String(ep.n); $("cmdText").focus(); window.scrollTo({ top: 0, behavior: "smooth" });
       } }, "Ra lệnh cho tập này");
-      card.append(el("div", { class: "tt-ep-actions" }, all, cmd,
+      const capAll = el("button", { class: "g-btn", type: "button", title: "Viết caption + hashtag cho cả 3 kênh qua PiAPI chat (~0,03 USD)", onclick: async () => {
+        capAll.disabled = true; capAll.textContent = "Đang viết caption…";
+        try { const r = await post("/api/tutien/posts/generate", { episode: ep.n, platform: "all" }, "tutien-social"); PL.forEach((p) => openPosts.add(`${ep.n}:${p}`)); applyPosts(ep.n, r.posts); }
+        catch (e) { alert(e.message); capAll.disabled = false; capAll.textContent = "Tạo caption 3 kênh"; }
+      } }, "Tạo caption 3 kênh");
+      card.append(el("div", { class: "tt-ep-actions" }, all, capAll, cmd,
         el("button", { class: "g-btn", type: "button", onclick: () => { editing = ep.n; renderEpisodes(); } }, "Sửa kế hoạch"),
         ep.can_render ? null : el("span", { class: "hint" }, "Chưa dựng — ra lệnh để Claude dựng tập này")));
     }
@@ -203,15 +282,15 @@ function render() {
   $("count").textContent = `${plan.episodes.length} tập · ${plan.episodes.filter((e) => e.videos && Object.keys(e.videos).length).length} đã có video`;
   renderRealms();
   renderCmdEpisodes();
-  if (editing === null) renderEpisodes();
+  if (editing === null && !editingPost.size) renderEpisodes();
 }
 
 async function refresh() {
   const [p, j] = await Promise.all([getJSON("/api/tutien"), getJSON("/api/tutien/jobs")]);
   const wasRunning = jobs.some((x) => x.status === "running");
   jobs = j.jobs || [];
-  const changed = JSON.stringify(p.episodes.map((e) => [e.status, e.rendering_now, Object.values(e.videos || {}).map((v) => v.mtime)])) !==
-    JSON.stringify((plan?.episodes || []).map((e) => [e.status, e.rendering_now, Object.values(e.videos || {}).map((v) => v.mtime)]));
+  const changed = JSON.stringify(p.episodes.map((e) => [e.status, e.rendering_now, Object.values(e.videos || {}).map((v) => v.mtime), Object.values(e.posts || {}).map((x) => x.created_at)])) !==
+    JSON.stringify((plan?.episodes || []).map((e) => [e.status, e.rendering_now, Object.values(e.videos || {}).map((v) => v.mtime), Object.values(e.posts || {}).map((x) => x.created_at)]));
   if (!plan || changed || wasRunning !== jobs.some((x) => x.status === "running")) { plan = p; render(); }
   renderJobs();
 }

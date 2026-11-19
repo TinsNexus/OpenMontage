@@ -274,6 +274,125 @@ def start_render(n: int, platform: str = "all") -> dict[str, Any]:
     return job
 
 
+# ---------------------------------------------------------------------------
+# captions + hashtags per platform
+# ---------------------------------------------------------------------------
+
+SOCIAL_PLATFORM = {"facebook": "facebook_reels", "tiktok": "tiktok", "youtube": "youtube_shorts"}
+
+
+def _episode_script(ep: dict[str, Any]) -> str:
+    rel = ep.get("script") or ""
+    if not rel:
+        return ""
+    path = (root() / rel).resolve()
+    if root().resolve() not in path.parents or not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if rel.endswith("series-bible.md"):   # tập 1 lives inside the bible
+        m = re.search(r"## 10\..*?(?=\n## \d+\.|\Z)", text, re.S)
+        text = m.group(0) if m else text
+    return text[:6000]
+
+
+def build_post_messages(plan: dict[str, Any], ep: dict[str, Any], platform: str, notes: str = "") -> list[dict[str, Any]]:
+    from backlot import social
+    rules = social.PLATFORMS[SOCIAL_PLATFORM[platform]]
+    meta = plan["platforms"][platform]
+    count = int(plan["counts"].get(platform, 0))
+    style = (ep.get("versions", {}).get(platform) or {}).get("style") or ""
+    system = ("You are a senior short-form social copywriter for a Vietnamese xianxia (tu tiên) animated series. "
+              "You write titles, captions and hashtags that stop the scroll without lying. Return ONLY a JSON object.")
+    user = f"""Write social copy for episode {ep['n']} of the series “{plan['series']}”.
+
+Series premise: social networks are the cultivation world — follow/subscribe is “tín ngưỡng lực”, the algorithm is “Thiên Đạo”.
+The hero Phạm Vô Danh is a nobody creator guided by Lão Tổ (an AI spirit living in his cracked phone). Each episode teaches one real
+content-creation lesson disguised as a cultivation technique.
+
+Platform: {rules['label']} (channel: {meta['channel']}, currently {count} {meta['unit']}, realm {realm_of(count)})
+Platform rules: {rules['rules']}
+Visual style of this version: {style or 'animated'}
+Episode title: {ep['title']}
+Real lesson (công pháp): {ep['lesson']}
+Cliffhanger: {ep['cliffhanger']}
+Episode script:
+<script>
+{_episode_script(ep) or '(no script file)'}
+</script>
+{('Creator notes: ' + notes.strip()) if notes.strip() else ''}
+
+Requirements:
+- Write titles and caption in Vietnamese. Hashtags may mix Vietnamese (no diacritics) and English, no spaces inside a hashtag.
+- First line is a hook. Mention it is episode {ep['n']} (“Tập {ep['n']}”) of {plan['series']}.
+- End the caption with a call to action to {meta['unit']} “để truyền tín ngưỡng lực” (use the word “{meta['unit']}”).
+- The voices are AI-generated: add a short natural note (e.g. “Lồng tiếng AI”) — platforms require disclosure.
+- Describe only what the script contains; do not invent plot.
+- Always include #tutien and #vonggioitutien; on YouTube always include #Shorts.
+
+JSON shape:
+{{"titles": ["option 1", "option 2", "option 3"], "caption": "...", "hashtags": ["#...", "..."]}}"""
+    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+
+
+def _store_post(n: int, platform: str, post: dict[str, Any]) -> dict[str, Any]:
+    with _lock:
+        plan = _read_json(_plan_path(), None)
+        if plan is None:
+            raise KeyError("plan.json not found")
+        ep = next((e for e in plan["episodes"] if e["n"] == n), None)
+        if ep is None:
+            raise KeyError(f"episode {n}")
+        posts = ep.setdefault("posts", {})
+        old = posts.get(platform)
+        if old and old.get("caption"):
+            post.setdefault("history", ((old.get("history") or []) + [{k: old.get(k) for k in ("titles", "caption", "hashtags", "created_at")}])[-5:])
+        posts[platform] = post
+        _write_json(_plan_path(), plan)
+    return post
+
+
+def generate_posts(n: int, platform: str = "all", notes: str = "") -> dict[str, Any]:
+    """Write titles + caption + hashtags with PiAPI's chat API (same path as the Gallery's social copy)."""
+    from backlot import social
+    from tools import piapi_client
+    plats = list(PLATFORMS) if platform == "all" else [platform]
+    if any(p not in PLATFORMS for p in plats):
+        raise ValueError("invalid platform")
+    plan = _read_json(_plan_path(), None)
+    if plan is None:
+        raise KeyError("plan.json not found")
+    ep = next((e for e in plan["episodes"] if e["n"] == n), None)
+    if ep is None:
+        raise KeyError(f"episode {n}")
+    api_key = piapi_client.get_api_key()
+    if not api_key:
+        raise RuntimeError("PIAPI_API_KEY / PIAPI_KEY chưa được đặt — caption được viết qua PiAPI chat.")
+    model = os.environ.get("BACKLOT_COPY_MODEL") or social.DEFAULT_MODEL
+    out = {}
+    for p in plats:
+        reply, usage = social._chat(build_post_messages(plan, ep, p, notes), model, api_key)
+        copy = social.parse_copy(reply)
+        out[p] = _store_post(n, p, {**copy, "source": "ai", "model": model, "notes": notes, "created_at": time.time(),
+                                    "usage": {k: usage.get(k) for k in ("prompt_tokens", "completion_tokens", "total_tokens") if k in usage}})
+    return {"episode": n, "posts": out}
+
+
+def save_post(n: int, platform: str, fields: dict[str, Any]) -> dict[str, Any]:
+    if platform not in PLATFORMS:
+        raise ValueError("invalid platform")
+    titles = [str(t).strip()[:200] for t in (fields.get("titles") or []) if str(t).strip()][:5]
+    caption = str(fields.get("caption") or "").strip()[:5000]
+    tags: list[str] = []
+    for raw in fields.get("hashtags") or []:
+        tag = "#" + re.sub(r"\s+", "", str(raw)).lstrip("#")
+        if len(tag) > 1 and tag.lower() not in {t.lower() for t in tags}:
+            tags.append(tag[:80])
+    if not caption:
+        raise ValueError("Caption trống.")
+    return _store_post(n, platform, {"titles": titles, "caption": caption, "hashtags": tags[:30],
+                                     "source": "manual", "created_at": time.time()})
+
+
 def _clean_env() -> dict[str, str]:
     """A fresh CLI session must use the user's own `claude` login, not the env of whatever
     Claude session happened to launch Backlot (its base URL / auth vars would leak in)."""

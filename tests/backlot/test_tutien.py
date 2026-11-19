@@ -77,3 +77,34 @@ def test_command_env_drops_session_vars(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://example.invalid")
     env = tutien._clean_env()
     assert "CLAUDECODE" not in env and "ANTHROPIC_BASE_URL" not in env
+
+
+def test_save_post_normalises_and_keeps_history(series):
+    tutien.save_post(1, "tiktok", {"titles": ["A", " "], "caption": " Hook ", "hashtags": ["tutien", "#TuTien", "#a b"]})
+    post = tutien.save_post(1, "tiktok", {"caption": "Hai", "hashtags": ["#x"]})
+    assert post["caption"] == "Hai" and post["history"][0]["caption"] == "Hook"
+    plan = json.loads((series / "plan.json").read_text(encoding="utf-8"))
+    assert plan["episodes"][0]["posts"]["tiktok"]["hashtags"] == ["#x"]
+    first = post["history"][0]
+    assert first["hashtags"] == ["#tutien", "#ab"] and first["titles"] == ["A"]
+    with pytest.raises(ValueError):
+        tutien.save_post(1, "tiktok", {"caption": "  "})
+    with pytest.raises(ValueError):
+        tutien.save_post(1, "myspace", {"caption": "x"})
+
+
+def test_generate_posts_uses_episode_context(series, monkeypatch):
+    from backlot import social
+    from tools import piapi_client
+    seen = []
+
+    def fake_chat(messages, model, key):
+        seen.append(messages[1]["content"])
+        return '{"titles":["T"],"caption":"C","hashtags":["tutien","#Shorts"]}', {"total_tokens": 10}
+
+    monkeypatch.setattr(social, "_chat", fake_chat)
+    monkeypatch.setattr(piapi_client, "get_api_key", lambda: "k")
+    out = tutien.generate_posts(1, "youtube")
+    assert out["posts"]["youtube"]["caption"] == "C" and out["posts"]["youtube"]["source"] == "ai"
+    assert "Episode title: A" in seen[0] and "Real lesson (công pháp): x" in seen[0]
+    assert "#Shorts" in seen[0]
