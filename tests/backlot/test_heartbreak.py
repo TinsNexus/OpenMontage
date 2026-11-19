@@ -440,3 +440,99 @@ def test_api_write_and_edit_prompts(client, studio_root, fake_chat, monkeypatch)
     prices = client.get(f"/api/heartbreak/{slug}/prices").json()
     assert len(prices["rows"]) == 8 and prices["total_seconds"] == 25
     assert client.get("/api/heartbreak/nope/prices").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# M2 — page /heartbreak, nav links, model pick
+# ---------------------------------------------------------------------------
+
+def test_heartbreak_page_serves_ui(client):
+    r = client.get("/heartbreak")
+    assert r.status_code == 200
+    html = r.text
+    assert "<title>Backlot — Xưởng Heartbreak</title>" in html
+    assert "/ui/heartbreak.js" in html and "/ui/heartbreak.css" in html
+    assert 'href="/heartbreak" aria-current="page"' in html          # self link in nav
+    for label in ("+ Tập mới", "stepper", "epList", "panel"):
+        assert label in html, label
+
+
+def test_nav_has_heartbreak_after_tutien_on_every_page(client):
+    pages = ("/", "/gallery", "/backlog", "/series", "/tutien", "/heartbreak",
+             "/insights", "/images", "/characters", "/swap", "/products", "/formulas")
+    for path in pages:
+        html = client.get(path).text
+        i = html.index('href="/tutien"')
+        j = html.index('href="/heartbreak"')
+        assert 0 < j - i < 240, f"{path}: Heartbreak not right after Tu Tiên"
+        # no duplicate links
+        assert html.count('href="/heartbreak"') == 1, path
+
+
+def test_page_load_makes_no_paid_calls(client, studio_root, monkeypatch):
+    """Opening /heartbreak (and its free GETs) must never reach PiAPI chat."""
+    def boom(*a, **k):
+        raise AssertionError("paid chat call triggered by page load")
+
+    monkeypatch.setattr(social, "_chat", boom)
+    monkeypatch.setattr(piapi_client, "get_api_key", lambda: "k")
+
+    assert client.get("/heartbreak").status_code == 200
+    assert client.get("/api/heartbreak").status_code == 200
+    assert client.get("/api/characters").status_code == 200
+
+
+def test_set_model_persists_choice(studio_root, fake_chat):
+    fake_chat(json.dumps(_plan(), ensure_ascii=False))
+    slug = _create(studio_root)
+    with pytest.raises(ValueError):
+        heartbreak.set_model(slug, "seedance-fast-720p")      # no clips -> no price table
+
+    heartbreak.write_prompts(slug)
+    table = heartbreak.price_table(slug)
+    for row in table["rows"]:                                  # every row id is selectable
+        heartbreak.set_model(slug, row["id"])
+
+    ep = heartbreak.set_model(slug, "seedance-standard-720p")
+    assert ep["model"] == {"tool": "seedance_piapi", "model_variant": "standard", "resolution": "720p"}
+    assert ep["model_id"] == "seedance-standard-720p"
+
+    ep = heartbreak.set_model(slug, "kling-30-pro")
+    assert ep["model"] == {"tool": "kling_piapi", "version": "3.0", "mode": "pro", "resolution": "1080p"}
+
+    saved = json.loads((studio_root / slug / "studio.json").read_text(encoding="utf-8"))
+    assert saved["model_id"] == "kling-30-pro" and saved["model"]["tool"] == "kling_piapi"
+
+    with pytest.raises(ValueError):
+        heartbreak.set_model(slug, "no-such-row")
+
+
+def test_api_set_model(client, studio_root, fake_chat):
+    r = client.post("/api/heartbreak/episodes",
+                    json={"title": "Tập giá", "idea": "ý tưởng",
+                          "slots": {"HERO": "hero", "CRUSH": "crush"}},
+                    headers=_hdr("heartbreak"))
+    slug = r.json()["slug"]
+
+    # cannot pick a model before prompts exist (no durations to price)
+    r = client.post(f"/api/heartbreak/{slug}/model", json={"model_id": "seedance-fast-720p"},
+                    headers=_hdr("heartbreak"))
+    assert r.status_code == 422
+
+    fake_chat(json.dumps(_plan(), ensure_ascii=False))
+    assert client.post(f"/api/heartbreak/{slug}/prompts", json={},
+                       headers=_hdr("heartbreak-paid")).status_code == 200
+
+    # writes need the action header
+    assert client.post(f"/api/heartbreak/{slug}/model",
+                       json={"model_id": "seedance-fast-720p"}).status_code == 403
+
+    r = client.post(f"/api/heartbreak/{slug}/model", json={"model_id": "seedance-fast-480p"},
+                    headers=_hdr("heartbreak"))
+    assert r.status_code == 200, r.text
+    assert r.json()["model_id"] == "seedance-fast-480p"
+    assert client.get(f"/api/heartbreak/{slug}").json()["model_id"] == "seedance-fast-480p"
+
+    r = client.post(f"/api/heartbreak/{slug}/model", json={"model_id": "bogus"},
+                    headers=_hdr("heartbreak"))
+    assert r.status_code == 422

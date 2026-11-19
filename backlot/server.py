@@ -798,6 +798,12 @@ def create_app() -> FastAPI:
     async def heartbreak_prices(slug: str) -> dict:
         return await asyncio.to_thread(_heartbreak_call, heartbreak.price_table, slug)
 
+    @app.post("/api/heartbreak/{slug}/model")
+    async def heartbreak_set_model(slug: str, request: Request, payload: dict = Body(...)) -> dict:
+        _require_action(request, "heartbreak")
+        return await asyncio.to_thread(_heartbreak_call, heartbreak.set_model, slug,
+                                       str(payload.get("model_id") or ""))
+
     @app.post("/api/heartbreak/{slug}/prompts")
     async def heartbreak_write_prompts(slug: str, request: Request, payload: dict = Body(default={})) -> dict:
         _require_action(request, "heartbreak-paid")
@@ -1403,6 +1409,10 @@ def create_app() -> FastAPI:
     @app.get("/tutien")
     async def tutien_page() -> HTMLResponse:
         return _ui_html("tutien.html", ("board.css", "gallery.css", "tutien.css", "tutien.js"))
+
+    @app.get("/heartbreak")
+    async def heartbreak_page() -> HTMLResponse:
+        return _ui_html("heartbreak.html", ("board.css", "gallery.css", "heartbreak.css", "heartbreak.js"))
 
     @app.get("/series")
     async def series_page_ui() -> HTMLResponse:

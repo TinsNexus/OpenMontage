@@ -863,3 +863,23 @@ def price_table(slug: str) -> dict[str, Any]:
         "spent_usd": float(studio.get("spent_usd") or 0.0),
         "model": studio.get("model"),
     }
+
+
+def set_model(slug: str, model_id: str) -> dict[str, Any]:
+    """Persist the user's model pick from the price table (M2 — local, no API)."""
+    table = price_table(slug)                     # also validates the episode + clips
+    row = next((r for r in table["rows"] if r["id"] == model_id), None)
+    if row is None:
+        raise ValueError(f"model_id không có trong bảng giá: {model_id}")
+    with _lock:
+        studio = _load_studio(slug)
+        if row["tool"] == "seedance_piapi":
+            model = {"tool": "seedance_piapi", "model_variant": row["model_variant"],
+                     "resolution": row["resolution"]}
+        else:
+            model = {"tool": "kling_piapi", "version": row["version"], "mode": row["mode"],
+                     "resolution": row["resolution"]}
+        studio["model"] = model
+        studio["model_id"] = row["id"]
+        _save_studio(slug, studio)
+    return {**studio, "slug": slug}
