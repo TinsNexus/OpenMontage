@@ -172,6 +172,7 @@ stages:
       - audio_enhance
       - image_selector
       - video_selector
+      - face_swap_piapi
       - pixabay_music
       - freesound_music
       - music_gen
@@ -183,6 +184,7 @@ stages:
       - pixabay_music
       - freesound_music
       - music_gen
+      - face_swap_piapi
     checkpoint_required: true
     human_approval_default: true
     review_focus:
